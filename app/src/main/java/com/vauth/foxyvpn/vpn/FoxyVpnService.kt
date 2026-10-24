@@ -1468,9 +1468,9 @@ class FoxyVpnService : VpnService() {
         fun start(context: Context) {
             val intent = Intent(context, FoxyVpnService::class.java).setAction(ACTION_CONNECT)
             runCatching {
-                ContextCompat.startForegroundService(context, intent)
+                context.startService(intent)
             }.onFailure {
-                runCatching { context.startService(intent) }
+                runCatching { ContextCompat.startForegroundService(context, intent) }
                     .onFailure { err -> AppLogger.e(TAG, "could not start FoxyVpnService", err) }
             }
         }

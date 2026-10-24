@@ -341,22 +341,27 @@ fun Modifier.automotiveLedBorder(
         drawContent()
         val w = size.width
         val h = size.height
+        if (!w.isFinite() || !h.isFinite()) return@drawWithContent
         val strokePx = borderWidth.toPx().coerceAtLeast(1f)
-        if (w <= strokePx * 2f || h <= strokePx * 2f) return@drawWithContent
+        if (w <= strokePx * 2.5f || h <= strokePx * 2.5f) return@drawWithContent
 
-        val cornerPx = cornerRadius.toPx().coerceAtLeast(0f)
+        val cornerPx = cornerRadius.toPx().coerceIn(0f, minOf(w, h) / 2f)
         val center = Offset(w / 2f, h / 2f)
 
-        val shader = SweepGradientShader(
-            center = center,
-            colors = palette,
-            colorStops = null,
-        )
-        val matrix = android.graphics.Matrix().apply {
-            setRotate(angleDeg, center.x, center.y)
+        // Compute rotated color stops or shifted palette for 100% pure Compose Brush.sweepGradient
+        val shiftedColors = run {
+            val base = palette.dropLast(1)
+            val count = base.size.coerceAtLeast(2)
+            val shiftFloat = ((angleDeg / 360f).coerceIn(0f, 1f)) * count
+            val shiftIdx = shiftFloat.toInt() % count
+            val rotated = List(count) { i -> base[(i + shiftIdx) % count] }
+            rotated + rotated.first()
         }
-        shader.setLocalMatrix(matrix)
-        val ledBrush = ShaderBrush(shader)
+
+        val ledBrush = Brush.sweepGradient(
+            colors = shiftedColors,
+            center = center,
+        )
         val rectTopLeft = Offset(strokePx / 2f, strokePx / 2f)
         val rectSize = Size((w - strokePx).coerceAtLeast(1f), (h - strokePx).coerceAtLeast(1f))
         val cr = CornerRadius(cornerPx, cornerPx)
@@ -368,7 +373,7 @@ fun Modifier.automotiveLedBorder(
             size = rectSize,
             cornerRadius = cr,
             alpha = (0.24f * pulseGlow).coerceIn(0.08f, 0.40f),
-            style = Stroke(width = strokePx * 2.8f, cap = StrokeCap.Round),
+            style = Stroke(width = strokePx * 2.6f, cap = StrokeCap.Round),
         )
         // Mid neon bloom layer
         drawRoundRect(
@@ -377,7 +382,7 @@ fun Modifier.automotiveLedBorder(
             size = rectSize,
             cornerRadius = cr,
             alpha = (0.48f * pulseGlow).coerceIn(0.18f, 0.65f),
-            style = Stroke(width = strokePx * 1.65f, cap = StrokeCap.Round),
+            style = Stroke(width = strokePx * 1.6f, cap = StrokeCap.Round),
         )
         // Crisp high-brightness LED core tube
         drawRoundRect(
@@ -596,7 +601,8 @@ fun NeumorphicRadarPulse(
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val center = Offset(this.size.width / 2f, this.size.height / 2f)
-            val maxRadius = this.size.minDimension / 2f
+            val maxRadius = (this.size.minDimension / 2f)
+            if (maxRadius <= 4f || !maxRadius.isFinite()) return@Canvas
 
             // Ambient soft radial aura glow (2026 glass/neon depth)
             val auraAlpha = when {
@@ -785,20 +791,26 @@ fun AnimatedWorldMapBackground(
     Canvas(modifier = modifier.fillMaxSize()) {
         val w = size.width
         val h = size.height
-        if (w <= 0f || h <= 0f) return@Canvas
+        if (w <= 16f || h <= 16f || !w.isFinite() || !h.isFinite()) return@Canvas
 
         // Scroll-driven 3D camera angles:
         // Scrolling changes both the 3D pitch (tiltAngle) and yaw (longitude rotation)
-        val scrollNormalized = (scrollOffsetPx / 900f)
+        val safeScrollPx = if (scrollOffsetPx.isFinite()) scrollOffsetPx else 0f
+        val scrollNormalized = (safeScrollPx / 900f)
         val tiltAngle = (0.32f + scrollNormalized * 0.65f).coerceIn(-0.65f, 0.85f)
         val cosTilt = cos(tiltAngle)
         val sinTilt = sin(tiltAngle)
         val yawAngle = autoRotation + scrollNormalized * 1.35f
 
-        val globeRadius = (minOf(w, h) * 0.44f).coerceIn(145.dp.toPx(), 260.dp.toPx())
+        val minGlobeR = minOf(145.dp.toPx(), minOf(w, h) * 0.45f).coerceAtLeast(16f)
+        val maxGlobeR = maxOf(260.dp.toPx(), minGlobeR + 1f)
+        val globeRadius = (minOf(w, h) * 0.44f).coerceIn(minGlobeR, maxGlobeR)
+
+        val minCenterY = minOf(130.dp.toPx(), h * 0.35f).coerceAtLeast(8f)
+        val maxCenterY = maxOf(h * 0.45f, minCenterY + 1f)
         val globeCenter = Offset(
             x = w * 0.5f,
-            y = (210.dp.toPx() - scrollOffsetPx * 0.08f).coerceIn(130.dp.toPx(), h * 0.45f),
+            y = (210.dp.toPx() - safeScrollPx * 0.08f).coerceIn(minCenterY, maxCenterY),
         )
 
         // Helper to project 3D spherical coordinates (lon, lat) onto 2D screen with depth z (-1..1)
@@ -1287,6 +1299,7 @@ fun NeumorphicSpeedometerGauge(
     Canvas(modifier = modifier) {
         val strokeWidth = 14.dp.toPx()
         val diameter = size.minDimension - strokeWidth * 2f
+        if (diameter <= 8f || !diameter.isFinite()) return@Canvas
         val topLeft = Offset((size.width - diameter) / 2f, (size.height - diameter) / 2f)
         val arcSize = Size(diameter, diameter)
         val center = Offset(size.width / 2f, size.height / 2f)

@@ -51,24 +51,39 @@ class DynamicIslandOverlayService : Service(), LifecycleOwner, ViewModelStoreOwn
     private var overlayView: View? = null
     private var windowLayoutParams: WindowManager.LayoutParams? = null
 
+    private var lifecycleInitialized = false
+
     override fun onCreate() {
         super.onCreate()
-        savedStateRegistryController.performRestore(null)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            runCatching { !Settings.canDrawOverlays(this) }.getOrDefault(true)
+        ) {
             stopSelf()
             return
         }
 
-        val app = applicationContext as? FoxyVpnApp ?: return
+        val app = applicationContext as? FoxyVpnApp
+        if (app == null) {
+            stopSelf()
+            return
+        }
+
+        runCatching {
+            savedStateRegistryController.performRestore(null)
+            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
+            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_START)
+            lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
+            lifecycleInitialized = true
+        }.onFailure {
+            stopSelf()
+            return
+        }
+
         windowManager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
 
         val baseOffsetY = 8
-        val initialX = app.settingsStore.dynamicIslandOffsetX.roundToInt()
-        val initialY = (baseOffsetY + app.settingsStore.dynamicIslandOffsetY.roundToInt()).coerceIn(0, 2200)
+        val initialX = app.settingsStore.dynamicIslandOffsetX.takeIf { it.isFinite() }?.roundToInt() ?: 0
+        val initialY = (baseOffsetY + (app.settingsStore.dynamicIslandOffsetY.takeIf { it.isFinite() }?.roundToInt() ?: 0)).coerceIn(0, 2200)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -89,83 +104,94 @@ class DynamicIslandOverlayService : Service(), LifecycleOwner, ViewModelStoreOwn
         }
         windowLayoutParams = params
 
-        val composeView = ComposeView(this).apply {
-            setViewTreeLifecycleOwner(this@DynamicIslandOverlayService)
-            setViewTreeSavedStateRegistryOwner(this@DynamicIslandOverlayService)
-            setViewTreeViewModelStoreOwner(this@DynamicIslandOverlayService)
-            setContent {
-                val revision by app.settingsStore.islandConfigRevision.collectAsState()
-                val proxy by app.proxyStateStore.selectedProxyFlow.collectAsState()
+        val composeView = runCatching {
+            ComposeView(this).apply {
+                setViewTreeLifecycleOwner(this@DynamicIslandOverlayService)
+                setViewTreeSavedStateRegistryOwner(this@DynamicIslandOverlayService)
+                setViewTreeViewModelStoreOwner(this@DynamicIslandOverlayService)
+                setContent {
+                    val revision by app.settingsStore.islandConfigRevision.collectAsState()
+                    val proxy by app.proxyStateStore.selectedProxyFlow.collectAsState()
 
-                // Sync overlay position when user resets position in settings
-                LaunchedEffect(revision) {
-                    val lp = windowLayoutParams ?: return@LaunchedEffect
-                    val targetX = app.settingsStore.dynamicIslandOffsetX.roundToInt()
-                    val targetY = (baseOffsetY + app.settingsStore.dynamicIslandOffsetY.roundToInt()).coerceIn(0, 2200)
-                    if (lp.x != targetX || lp.y != targetY) {
-                        lp.x = targetX
-                        lp.y = targetY
-                        runCatching {
-                            overlayView?.let { v -> windowManager?.updateViewLayout(v, lp) }
-                        }
-                    }
-                }
-
-                FoxyVpnTheme(
-                    themeMode = app.settingsStore.themeMode,
-                    appLanguage = app.settingsStore.appLanguage,
-                    colorTheme = app.settingsStore.appColorTheme,
-                ) {
-                    DynamicIsland(
-                        settingsStore = app.settingsStore,
-                        selectedProxy = proxy,
-                        onDisconnect = { FoxyVpnService.stop(this@DynamicIslandOverlayService) },
-                        onRequestConnect = {
-                            runCatching {
-                                val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                }
-                                startActivity(intent)
-                            }
-                        },
-                        onOpenServers = {
-                            runCatching {
-                                val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
-                                }
-                                startActivity(intent)
-                            }
-                        },
-                        isSystemOverlay = true,
-                        onOverlayDragDelta = { dx, dy ->
-                            val lp = windowLayoutParams ?: return@DynamicIsland
-                            lp.x += dx.roundToInt()
-                            lp.y = (lp.y + dy.roundToInt()).coerceIn(0, 2200)
-                            app.settingsStore.dynamicIslandOffsetX = lp.x.toFloat()
-                            app.settingsStore.dynamicIslandOffsetY = (lp.y - baseOffsetY).toFloat()
+                    // Sync overlay position when user resets position in settings
+                    LaunchedEffect(revision) {
+                        val lp = windowLayoutParams ?: return@LaunchedEffect
+                        val targetX = app.settingsStore.dynamicIslandOffsetX.takeIf { it.isFinite() }?.roundToInt() ?: 0
+                        val targetY = (baseOffsetY + (app.settingsStore.dynamicIslandOffsetY.takeIf { it.isFinite() }?.roundToInt() ?: 0)).coerceIn(0, 2200)
+                        if (lp.x != targetX || lp.y != targetY) {
+                            lp.x = targetX
+                            lp.y = targetY
                             runCatching {
                                 overlayView?.let { v -> windowManager?.updateViewLayout(v, lp) }
                             }
-                        },
-                    )
+                        }
+                    }
+
+                    FoxyVpnTheme(
+                        themeMode = app.settingsStore.themeMode,
+                        appLanguage = app.settingsStore.appLanguage,
+                        colorTheme = app.settingsStore.appColorTheme,
+                    ) {
+                        DynamicIsland(
+                            settingsStore = app.settingsStore,
+                            selectedProxy = proxy,
+                            onDisconnect = { FoxyVpnService.stop(this@DynamicIslandOverlayService) },
+                            onRequestConnect = {
+                                runCatching {
+                                    val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                    }
+                                    startActivity(intent)
+                                }
+                            },
+                            onOpenServers = {
+                                runCatching {
+                                    val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
+                                        flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                    }
+                                    startActivity(intent)
+                                }
+                            },
+                            isSystemOverlay = true,
+                            onOverlayDragDelta = { dx, dy ->
+                                val lp = windowLayoutParams ?: return@DynamicIsland
+                                if (!dx.isFinite() || !dy.isFinite()) return@DynamicIsland
+                                lp.x += dx.roundToInt()
+                                lp.y = (lp.y + dy.roundToInt()).coerceIn(0, 2200)
+                                app.settingsStore.dynamicIslandOffsetX = lp.x.toFloat()
+                                app.settingsStore.dynamicIslandOffsetY = (lp.y - baseOffsetY).toFloat()
+                                runCatching {
+                                    overlayView?.let { v -> windowManager?.updateViewLayout(v, lp) }
+                                }
+                            },
+                        )
+                    }
                 }
             }
+        }.getOrElse {
+            stopSelf()
+            return
         }
 
         overlayView = composeView
         runCatching {
             windowManager?.addView(composeView, params)
         }.onFailure {
+            overlayView = null
             stopSelf()
         }
     }
 
     override fun onDestroy() {
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
-        lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
-        store.clear()
-        scope.cancel()
+        if (lifecycleInitialized) {
+            runCatching {
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_PAUSE)
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_STOP)
+                lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_DESTROY)
+            }
+        }
+        runCatching { store.clear() }
+        runCatching { scope.cancel() }
 
         overlayView?.let { view ->
             runCatching { windowManager?.removeView(view) }

@@ -133,16 +133,17 @@ fun Modifier.neumorphicRaised(
     darkShadowColor: Color? = null,
 ): Modifier = this.then(
     Modifier.drawBehind {
+        if (size.width <= 2f || size.height <= 2f || !size.width.isFinite() || !size.height.isFinite()) return@drawBehind
         val lightColor = lightShadowColor ?: if (drawContext.size.width > 0) Color.White.copy(alpha = 0.9f) else Color.White
         val darkColor = darkShadowColor ?: Color.Black.copy(alpha = 0.15f)
 
         val currentElev = if (isPressed) (elevation * 0.25f) else elevation
         val blurPx = currentElev.toPx()
         val offsetPx = (currentElev * 0.85f).toPx()
-        val radiusPx = cornerRadius.toPx()
+        val radiusPx = cornerRadius.toPx().coerceAtLeast(0f)
 
         drawIntoCanvas { canvas ->
-            if (blurPx > 0.5f) {
+            if (blurPx > 0.5f && blurPx.isFinite()) {
                 // Top-left light highlight
                 val paintLight = Paint().asFrameworkPaint().apply {
                     color = lightColor.toArgb()
@@ -191,10 +192,11 @@ fun Modifier.neumorphicSunken(
     Modifier
         .clip(shape)
         .drawBehind {
-            val r = cornerRadius.toPx()
-            val d = depth.toPx()
             val w = size.width
             val h = size.height
+            if (w <= 2f || h <= 2f || !w.isFinite() || !h.isFinite()) return@drawBehind
+            val r = cornerRadius.toPx().coerceAtLeast(0f)
+            val d = depth.toPx().coerceAtLeast(1f)
 
             // Subtle base fill
             if (surfaceColor != Color.Transparent) {
@@ -210,17 +212,19 @@ fun Modifier.neumorphicSunken(
                 brush = Brush.linearGradient(
                     colors = listOf(Color.Black.copy(alpha = 0.14f), Color.Transparent),
                     start = Offset(0f, 0f),
-                    end = Offset(d * 2.5f, d * 2.5f),
+                    end = Offset((d * 2.5f).coerceAtLeast(2f), (d * 2.5f).coerceAtLeast(2f)),
                 ),
                 size = size,
                 cornerRadius = CornerRadius(r, r),
             )
 
             // Bottom-right inset light highlight
+            val startX = (w - d * 2f).coerceAtMost(w - 2f)
+            val startY = (h - d * 2f).coerceAtMost(h - 2f)
             drawRoundRect(
                 brush = Brush.linearGradient(
                     colors = listOf(Color.Transparent, Color.White.copy(alpha = 0.25f)),
-                    start = Offset(w - d * 2f, h - d * 2f),
+                    start = Offset(startX, startY),
                     end = Offset(w, h),
                 ),
                 size = size,

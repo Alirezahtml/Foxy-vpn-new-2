@@ -45,20 +45,23 @@ class FoxyVpnApp : Application() {
     override fun onCreate() {
         super.onCreate()
 
-        CrashReporter.install(this)
-        CrashReporter.replayLastCrashIfAny(this)
+        runCatching { CrashReporter.install(this) }
+        runCatching { CrashReporter.replayLastCrashIfAny(this) }
 
-        NettyLoggingBridge.install()
+        runCatching { NettyLoggingBridge.install() }
         installConscrypt()
-        UpstreamTrust.init(this)
+        runCatching { UpstreamTrust.init(this) }
+            .onFailure { AppLogger.e("FoxyVpnApp", "UpstreamTrust init failed", it) }
         tokenStore = TokenStore(this)
         proxyStateStore = ProxyStateStore(this)
         settingsStore = SettingsStore(this)
-        ControlPlaneHttp.tlsSplitModeProvider = { settingsStore.tlsSplitMode }
+        ControlPlaneHttp.tlsSplitModeProvider = {
+            runCatching { settingsStore.tlsSplitMode }.getOrDefault(SettingsStore.TlsSplitMode.OFF)
+        }
         guardianClient = GuardianClient()
         serverListClient = ServerListClient(this)
         authRepository = FxaAuthRepository(tokenStore)
-        createNotificationChannel()
+        runCatching { createNotificationChannel() }
         startScheduleAutomationLoop()
     }
 
@@ -68,34 +71,38 @@ class FoxyVpnApp : Application() {
             var lastTriggeredEndKey = -1
             while (isActive) {
                 delay(15_000L)
-                if (!settingsStore.scheduleEnabled) continue
+                runCatching {
+                    if (!::settingsStore.isInitialized || !settingsStore.scheduleEnabled) return@runCatching
 
-                val cal = Calendar.getInstance()
-                val hour = cal.get(Calendar.HOUR_OF_DAY)
-                val minute = cal.get(Calendar.MINUTE)
-                val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
-                val minuteKey = dayOfYear * 1440 + hour * 60 + minute
+                    val cal = Calendar.getInstance()
+                    val hour = cal.get(Calendar.HOUR_OF_DAY)
+                    val minute = cal.get(Calendar.MINUTE)
+                    val dayOfYear = cal.get(Calendar.DAY_OF_YEAR)
+                    val minuteKey = dayOfYear * 1440 + hour * 60 + minute
 
-                val startMatch = hour == settingsStore.scheduleStartHour && minute == settingsStore.scheduleStartMinute
-                val endMatch = hour == settingsStore.scheduleEndHour && minute == settingsStore.scheduleEndMinute
+                    val startMatch = hour == settingsStore.scheduleStartHour && minute == settingsStore.scheduleStartMinute
+                    val endMatch = hour == settingsStore.scheduleEndHour && minute == settingsStore.scheduleEndMinute
 
-                if (startMatch && lastTriggeredStartKey != minuteKey) {
-                    lastTriggeredStartKey = minuteKey
-                    if (FoxyVpnService.state.value == ConnectionState.DISCONNECTED && tokenStore.loadAuth() != null) {
-                        val canStartWithoutPrompt = settingsStore.proxyOnlyMode || VpnService.prepare(this@FoxyVpnApp) == null
-                        if (canStartWithoutPrompt) {
-                            AppLogger.i("FoxySchedule", "Scheduled Auto-Connect triggered at $hour:$minute")
-                            runCatching { FoxyVpnService.start(this@FoxyVpnApp) }
+                    if (startMatch && lastTriggeredStartKey != minuteKey) {
+                        lastTriggeredStartKey = minuteKey
+                        if (FoxyVpnService.state.value == ConnectionState.DISCONNECTED && tokenStore.loadAuth() != null) {
+                            val canStartWithoutPrompt = settingsStore.proxyOnlyMode || VpnService.prepare(this@FoxyVpnApp) == null
+                            if (canStartWithoutPrompt) {
+                                AppLogger.i("FoxySchedule", "Scheduled Auto-Connect triggered at $hour:$minute")
+                                FoxyVpnService.start(this@FoxyVpnApp)
+                            }
                         }
                     }
-                }
 
-                if (endMatch && lastTriggeredEndKey != minuteKey) {
-                    lastTriggeredEndKey = minuteKey
-                    if (FoxyVpnService.state.value != ConnectionState.DISCONNECTED) {
-                        AppLogger.i("FoxySchedule", "Scheduled Auto-Disconnect triggered at $hour:$minute")
-                        runCatching { FoxyVpnService.stop(this@FoxyVpnApp) }
+                    if (endMatch && lastTriggeredEndKey != minuteKey) {
+                        lastTriggeredEndKey = minuteKey
+                        if (FoxyVpnService.state.value != ConnectionState.DISCONNECTED) {
+                            AppLogger.i("FoxySchedule", "Scheduled Auto-Disconnect triggered at $hour:$minute")
+                            FoxyVpnService.stop(this@FoxyVpnApp)
+                        }
                     }
+                }.onFailure {
+                    AppLogger.w("FoxySchedule", "Schedule check error: ${it.message}")
                 }
             }
         }
@@ -116,12 +123,12 @@ class FoxyVpnApp : Application() {
             "VPN status",
             NotificationManager.IMPORTANCE_LOW,
         )
-        getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+        getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
     }
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        QuickConnectWidgetProvider.updateAll(this, FoxyVpnService.state.value)
+        runCatching { QuickConnectWidgetProvider.updateAll(this, FoxyVpnService.state.value) }
     }
 
     companion object {

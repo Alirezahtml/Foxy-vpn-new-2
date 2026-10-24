@@ -1176,7 +1176,7 @@ fun HomeScreen(
                         ) {
                             Box(
                                 modifier = Modifier
-                                    .fillMaxWidth(animatedQuotaFraction)
+                                    .fillMaxWidth(animatedQuotaFraction.coerceIn(0f, 1f))
                                     .fillMaxHeight()
                                     .clip(progressShape)
                                     .background(

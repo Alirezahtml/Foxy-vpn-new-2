@@ -297,7 +297,7 @@ fun DynamicIsland(
 
     // Manual 0%..100% linear size scale factor
     val scalePercent = settingsStore.dynamicIslandScalePercent.coerceIn(0, 100)
-    val manualScaleFactor by animateFloatAsState(
+    val rawManualScaleFactor by animateFloatAsState(
         targetValue = 0.74f + (scalePercent / 100f) * 0.52f, // 0% -> 0.74x, 50% -> 1.00x, 100% -> 1.26x
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
@@ -305,21 +305,26 @@ fun DynamicIsland(
         ),
         label = "island-manual-scale",
     )
+    val manualScaleFactor = rawManualScaleFactor.takeIf { it.isFinite() }?.coerceIn(0.65f, 1.35f) ?: 1f
 
     val sizeConfig = settingsStore.dynamicIslandSize
-    val scaledMinWidth = (sizeConfig.widthDp * manualScaleFactor).dp
-    val scaledMaxCollapsedWidth = ((sizeConfig.widthDp + 110) * manualScaleFactor).coerceAtMost(430f).dp
-    val scaledMinHeight = (sizeConfig.heightDp * manualScaleFactor).dp
+    val minWidthDpVal = (sizeConfig.widthDp * manualScaleFactor).coerceIn(110f, 380f)
+    val maxCollapsedWidthDpVal = ((sizeConfig.widthDp + 110) * manualScaleFactor)
+        .coerceIn(minWidthDpVal + 12f, 430f)
+    val scaledMinWidth = minWidthDpVal.dp
+    val scaledMaxCollapsedWidth = maxCollapsedWidthDpVal.dp
+    val scaledMinHeight = (sizeConfig.heightDp * manualScaleFactor).coerceIn(28f, 120f).dp
 
-    val baseCornerRadius = settingsStore.dynamicIslandCornerRadius.dp
-    val pillCornerRadius by animateDpAsState(
+    val baseCornerRadius = settingsStore.dynamicIslandCornerRadius.coerceIn(18, 42).dp
+    val rawPillCornerRadius by animateDpAsState(
         targetValue = if (isExpanded) 30.dp else (baseCornerRadius * manualScaleFactor).coerceIn(18.dp, 42.dp),
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
+            dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow,
         ),
         label = "island-corner-radius",
     )
+    val pillCornerRadius = rawPillCornerRadius.coerceIn(12.dp, 48.dp)
 
     val activeStatusColor by animateColorAsState(
         targetValue = when (state) {
@@ -384,7 +389,7 @@ fun DynamicIsland(
         }
 
         val smoothOffsetX by animateFloatAsState(
-            targetValue = inAppOffsetX,
+            targetValue = inAppOffsetX.takeIf { it.isFinite() }?.coerceIn(-360f, 360f) ?: 0f,
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium,
@@ -392,13 +397,15 @@ fun DynamicIsland(
             label = "island-smooth-drag-x",
         )
         val smoothOffsetY by animateFloatAsState(
-            targetValue = inAppOffsetY,
+            targetValue = inAppOffsetY.takeIf { it.isFinite() }?.coerceIn(-60f, 900f) ?: 0f,
             animationSpec = spring(
                 dampingRatio = Spring.DampingRatioNoBouncy,
                 stiffness = Spring.StiffnessMedium,
             ),
             label = "island-smooth-drag-y",
         )
+
+        val effectiveMaxWidth = if (isExpanded) maxOf(440.dp, scaledMinWidth + 16.dp) else maxOf(scaledMaxCollapsedWidth, scaledMinWidth + 8.dp)
 
         Box(
             modifier = Modifier
@@ -415,9 +422,9 @@ fun DynamicIsland(
                 .then(dragGestureModifier)
                 .widthIn(
                     min = scaledMinWidth,
-                    max = if (isExpanded) 440.dp else scaledMaxCollapsedWidth,
+                    max = effectiveMaxWidth,
                 )
-                .heightIn(min = if (isExpanded) 164.dp else scaledMinHeight)
+                .heightIn(min = if (isExpanded) maxOf(164.dp, scaledMinHeight) else scaledMinHeight)
                 .animateContentSize(
                     animationSpec = spring(
                         dampingRatio = 0.78f,

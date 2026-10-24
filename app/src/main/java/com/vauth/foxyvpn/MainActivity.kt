@@ -12,9 +12,11 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
 import androidx.navigation.compose.rememberNavController
+import com.vauth.foxyvpn.data.AppLogger
 import com.vauth.foxyvpn.data.model.ConnectionState
 import com.vauth.foxyvpn.quicksettings.DynamicIslandOverlayService
 import com.vauth.foxyvpn.ui.navigation.FoxyNavGraph
@@ -22,6 +24,7 @@ import com.vauth.foxyvpn.ui.theme.FoxyVpnTheme
 import com.vauth.foxyvpn.ui.theme.rememberLanguageController
 import com.vauth.foxyvpn.ui.theme.rememberThemeController
 import com.vauth.foxyvpn.vpn.FoxyVpnService
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
 
@@ -41,11 +44,13 @@ class MainActivity : ComponentActivity() {
                 com.vauth.foxyvpn.ui.theme.AppLanguage.EN ->
                     "FoxyVpn needs Android's VPN permission to tunnel this device's traffic."
             }
-            Toast.makeText(
-                this,
-                msg,
-                Toast.LENGTH_LONG,
-            ).show()
+            runCatching {
+                Toast.makeText(
+                    this,
+                    msg,
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
         }
     }
 
@@ -54,56 +59,70 @@ class MainActivity : ComponentActivity() {
     ) { }
 
     private fun requestConnect() {
-        val app = application as FoxyVpnApp
-        if (app.settingsStore.dynamicIslandEnabled && app.settingsStore.dynamicIslandOverlayEnabled) {
-            DynamicIslandOverlayService.start(this)
-        }
-        if (app.settingsStore.proxyOnlyMode) {
-            requestNotificationPermissionIfNeeded()
-            FoxyVpnService.start(this)
-            return
-        }
+        runCatching {
+            val app = application as FoxyVpnApp
+            if (app.settingsStore.dynamicIslandEnabled && app.settingsStore.dynamicIslandOverlayEnabled) {
+                DynamicIslandOverlayService.start(this)
+            }
+            if (app.settingsStore.proxyOnlyMode) {
+                requestNotificationPermissionIfNeeded()
+                FoxyVpnService.start(this)
+                return
+            }
 
-        val prepareIntent = VpnService.prepare(this)
-        if (prepareIntent != null) {
-            vpnPermissionLauncher.launch(prepareIntent)
-        } else {
-            requestNotificationPermissionIfNeeded()
-            FoxyVpnService.start(this)
+            val prepareIntent = runCatching { VpnService.prepare(this) }.getOrNull()
+            if (prepareIntent != null) {
+                vpnPermissionLauncher.launch(prepareIntent)
+            } else {
+                requestNotificationPermissionIfNeeded()
+                FoxyVpnService.start(this)
+            }
+        }.onFailure { err ->
+            AppLogger.e("MainActivity", "requestConnect failed", err)
         }
     }
 
     private fun requestNotificationPermissionIfNeeded() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
-        val alreadyGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
-        if (!alreadyGranted) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        runCatching {
+            val alreadyGranted = ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) == PackageManager.PERMISSION_GRANTED
+            if (!alreadyGranted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        runCatching { enableEdgeToEdge() }
         val app = application as FoxyVpnApp
-        if (app.settingsStore.dynamicIslandEnabled && app.settingsStore.dynamicIslandOverlayEnabled) {
-            DynamicIslandOverlayService.start(this)
-        }
-
-        // Auto-Connect on App Launch if enabled and signed in
-        if (savedInstanceState == null &&
-            app.settingsStore.autoConnectOnLaunch &&
-            FoxyVpnService.state.value == ConnectionState.DISCONNECTED &&
-            app.tokenStore.loadAuth() != null
-        ) {
-            requestConnect()
-        }
+        val isFirstLaunch = savedInstanceState == null
 
         setContent {
             val themeController = rememberThemeController(app.settingsStore)
             val languageController = rememberLanguageController(app.settingsStore)
+
+            LaunchedEffect(Unit) {
+                delay(650L)
+                runCatching {
+                    if (app.settingsStore.dynamicIslandEnabled && app.settingsStore.dynamicIslandOverlayEnabled) {
+                        DynamicIslandOverlayService.start(this@MainActivity)
+                    }
+                    if (isFirstLaunch &&
+                        app.settingsStore.autoConnectOnLaunch &&
+                        FoxyVpnService.state.value == ConnectionState.DISCONNECTED &&
+                        app.tokenStore.loadAuth() != null
+                    ) {
+                        requestConnect()
+                    }
+                }.onFailure { err ->
+                    AppLogger.w("MainActivity", "Post-launch startup action failed: ${err.message}")
+                }
+            }
+
             FoxyVpnTheme(
                 themeMode = themeController.mode,
                 appLanguage = languageController.language,
