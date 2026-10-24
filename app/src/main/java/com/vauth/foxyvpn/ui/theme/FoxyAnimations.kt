@@ -348,20 +348,23 @@ fun Modifier.automotiveLedBorder(
         val cornerPx = cornerRadius.toPx().coerceIn(0f, minOf(w, h) / 2f)
         val center = Offset(w / 2f, h / 2f)
 
-        // Compute rotated color stops or shifted palette for 100% pure Compose Brush.sweepGradient
-        val shiftedColors = run {
-            val base = palette.dropLast(1)
-            val count = base.size.coerceAtLeast(2)
-            val shiftFloat = ((angleDeg / 360f).coerceIn(0f, 1f)) * count
-            val shiftIdx = shiftFloat.toInt() % count
-            val rotated = List(count) { i -> base[(i + shiftIdx) % count] }
-            rotated + rotated.first()
+        val ledBrush = runCatching {
+            val shader = SweepGradientShader(
+                center = center,
+                colors = palette,
+                colorStops = null,
+            )
+            val matrix = android.graphics.Matrix().apply {
+                setRotate(angleDeg, center.x, center.y)
+            }
+            shader.setLocalMatrix(matrix)
+            ShaderBrush(shader)
+        }.getOrElse {
+            Brush.sweepGradient(
+                colors = palette,
+                center = center,
+            )
         }
-
-        val ledBrush = Brush.sweepGradient(
-            colors = shiftedColors,
-            center = center,
-        )
         val rectTopLeft = Offset(strokePx / 2f, strokePx / 2f)
         val rectSize = Size((w - strokePx).coerceAtLeast(1f), (h - strokePx).coerceAtLeast(1f))
         val cr = CornerRadius(cornerPx, cornerPx)
