@@ -1,13 +1,11 @@
 package com.vauth.foxyvpn.ui.components
 
 import android.content.Intent
-import android.content.pm.ApplicationInfo
-import android.content.pm.PackageManager
-import android.graphics.BlurMaskFilter
+import android.net.Uri
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
@@ -57,7 +55,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Apps
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.OpenWith
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Search
@@ -88,21 +85,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vauth.foxyvpn.data.DynamicIslandLedStyle
@@ -112,6 +103,7 @@ import com.vauth.foxyvpn.data.model.ConnectionState
 import com.vauth.foxyvpn.data.model.ProxyCandidate
 import com.vauth.foxyvpn.data.model.emojiFlag
 import com.vauth.foxyvpn.ui.theme.AnimatedSignalTowerWave
+import com.vauth.foxyvpn.ui.theme.AppLanguage
 import com.vauth.foxyvpn.ui.theme.LocalFoxyStatusColors
 import com.vauth.foxyvpn.ui.theme.automotiveLedBorder
 import com.vauth.foxyvpn.ui.theme.currentFoxyFonts
@@ -133,62 +125,38 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlin.math.roundToInt
 
-/**
- * Native OS Drop-Shadow & Ambient Glow Modifier for Dynamic Island.
- */
-private fun Modifier.nativeIslandDropShadow(
-    cornerRadius: Dp,
-    shadowElevation: Dp,
-    glowColor: Color,
-    glowAlpha: Float,
-): Modifier = this.then(
-    Modifier.drawBehind {
-        if (size.width <= 4f || size.height <= 4f) return@drawBehind
-        val rPx = cornerRadius.toPx().coerceAtLeast(0f)
-        val blurPx = shadowElevation.toPx().coerceAtLeast(1f)
-        val dyPx = (shadowElevation * 0.42f).toPx()
-
-        drawIntoCanvas { canvas ->
-            // 1. Soft OS Drop Shadow
-            val dropPaint = Paint().asFrameworkPaint().apply {
-                color = Color.Black.copy(alpha = 0.48f).toArgb()
-                isAntiAlias = true
-                maskFilter = BlurMaskFilter(blurPx, BlurMaskFilter.Blur.NORMAL)
-            }
-            canvas.nativeCanvas.drawRoundRect(
-                2f,
-                dyPx,
-                size.width - 2f,
-                size.height + dyPx * 0.8f,
-                rPx,
-                rPx,
-                dropPaint,
-            )
-
-            // 2. Subtle Ambient Status Glow
-            if (glowAlpha > 0.02f) {
-                val glowPaint = Paint().asFrameworkPaint().apply {
-                    color = glowColor.copy(alpha = glowAlpha.coerceIn(0f, 0.55f)).toArgb()
-                    isAntiAlias = true
-                    maskFilter = BlurMaskFilter(blurPx * 1.25f, BlurMaskFilter.Blur.NORMAL)
-                }
-                canvas.nativeCanvas.drawRoundRect(
-                    0f,
-                    0f,
-                    size.width,
-                    size.height,
-                    rPx,
-                    rPx,
-                    glowPaint,
-                )
-            }
-        }
-    }
-)
-
 data class IslandPinnedAppInfo(
     val packageName: String,
     val label: String,
+)
+
+private data class IslandTelemetryCardItem(
+    val label: String,
+    val value: String,
+    val valueColor: Color,
+)
+
+private val KNOWN_APP_FALLBACK_LABELS = mapOf(
+    "com.google.android.youtube" to "YouTube",
+    "org.telegram.messenger" to "Telegram",
+    "com.android.chrome" to "Chrome",
+    "com.instagram.android" to "Instagram",
+    "com.whatsapp" to "WhatsApp",
+    "com.twitter.android" to "X (Twitter)",
+    "com.spotify.music" to "Spotify",
+    "com.discord" to "Discord",
+    "com.zhiliaoapp.musically" to "TikTok",
+)
+
+private val KNOWN_APP_WEB_FALLBACKS = mapOf(
+    "com.google.android.youtube" to "https://m.youtube.com",
+    "org.telegram.messenger" to "https://web.telegram.org",
+    "com.android.chrome" to "https://www.google.com",
+    "com.instagram.android" to "https://www.instagram.com",
+    "com.whatsapp" to "https://web.whatsapp.com",
+    "com.twitter.android" to "https://x.com",
+    "com.spotify.music" to "https://open.spotify.com",
+    "com.discord" to "https://discord.com/app",
 )
 
 @Composable
@@ -222,6 +190,7 @@ fun DynamicIsland(
 
     var isExpanded by remember { mutableStateOf(false) }
     var showCustomizeModal by remember { mutableStateOf(false) }
+    var showDirectAppPicker by remember { mutableStateOf(false) }
     var elapsedSeconds by remember { mutableLongStateOf(0L) }
 
     // Touch-drag position state for in-app dragging (synced with SettingsStore)
@@ -240,7 +209,7 @@ fun DynamicIsland(
         }
     }
 
-    // Load labels for pinned apps
+    // Load labels for pinned apps (with clean fallback labels for YouTube, Telegram, Chrome, etc.)
     val pinnedPacNames = settingsStore.dynamicIslandPinnedApps
     val pinnedApps by produceState<List<IslandPinnedAppInfo>>(initialValue = emptyList(), key1 = pinnedPacNames) {
         value = withContext(Dispatchers.IO) {
@@ -249,42 +218,35 @@ fun DynamicIsland(
                 runCatching {
                     val info = pm.getApplicationInfo(pkg, 0)
                     IslandPinnedAppInfo(pkg, pm.getApplicationLabel(info).toString())
-                }.getOrNull()
+                }.getOrElse {
+                    KNOWN_APP_FALLBACK_LABELS[pkg]?.let { fallbackLabel ->
+                        IslandPinnedAppInfo(pkg, fallbackLabel)
+                    }
+                }
             }
         }
     }
 
-    // Soft breathing glow animation
-    val infiniteTransition = rememberInfiniteTransition(label = "island-native-glow")
-    val glowPulse by infiniteTransition.animateFloat(
-        initialValue = 0.22f,
-        targetValue = 0.58f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(1400, easing = FastOutSlowInEasing),
-            repeatMode = RepeatMode.Reverse,
-        ),
-        label = "glow-pulse",
-    )
-
     val islandTheme = settingsStore.dynamicIslandTheme
+    // 100% Opaque, clean gradients so rounded corners never show dark shadow bleed or corner artifacts
     val pillBrush = when (islandTheme) {
         SettingsStore.DynamicIslandTheme.DARK -> Brush.verticalGradient(
             colors = listOf(
-                Color(0xF212161F),
-                Color(0xF5080A0F),
+                Color(0xFF141923),
+                Color(0xFF0A0D14),
             ),
         )
         SettingsStore.DynamicIslandTheme.ACCENT -> Brush.linearGradient(
             colors = listOf(
-                neu.accent.copy(alpha = 0.94f),
-                neu.accent.copy(alpha = 0.84f),
+                neu.accent,
+                neu.accent.copy(alpha = 0.92f),
             ),
         )
         SettingsStore.DynamicIslandTheme.NEUMORPHIC -> Brush.verticalGradient(
             colors = if (neu.isDark) {
-                listOf(Color(0xEB1D222B), Color(0xF0141820))
+                listOf(Color(0xFF1D222C), Color(0xFF13171F))
             } else {
-                listOf(Color(0xF2F2F6FC), Color(0xEBDFE6F2))
+                listOf(Color(0xFFF6F9FF), Color(0xFFE7EEF8))
             },
         )
     }
@@ -298,7 +260,7 @@ fun DynamicIsland(
     // Manual 0%..100% linear size scale factor
     val scalePercent = settingsStore.dynamicIslandScalePercent.coerceIn(0, 100)
     val rawManualScaleFactor by animateFloatAsState(
-        targetValue = 0.74f + (scalePercent / 100f) * 0.52f, // 0% -> 0.74x, 50% -> 1.00x, 100% -> 1.26x
+        targetValue = 0.74f + (scalePercent / 100f) * 0.52f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow,
@@ -308,23 +270,23 @@ fun DynamicIsland(
     val manualScaleFactor = rawManualScaleFactor.takeIf { it.isFinite() }?.coerceIn(0.65f, 1.35f) ?: 1f
 
     val sizeConfig = settingsStore.dynamicIslandSize
-    val minWidthDpVal = (sizeConfig.widthDp * manualScaleFactor).coerceIn(110f, 380f)
-    val maxCollapsedWidthDpVal = ((sizeConfig.widthDp + 110) * manualScaleFactor)
-        .coerceIn(minWidthDpVal + 12f, 430f)
+    val minWidthDpVal = (sizeConfig.widthDp * manualScaleFactor).coerceIn(115f, 380f)
+    val maxCollapsedWidthDpVal = ((sizeConfig.widthDp + 115) * manualScaleFactor)
+        .coerceIn(minWidthDpVal + 16f, 430f)
     val scaledMinWidth = minWidthDpVal.dp
     val scaledMaxCollapsedWidth = maxCollapsedWidthDpVal.dp
-    val scaledMinHeight = (sizeConfig.heightDp * manualScaleFactor).coerceIn(28f, 120f).dp
+    val scaledMinHeight = (sizeConfig.heightDp * manualScaleFactor).coerceIn(30f, 110f).dp
 
     val baseCornerRadius = settingsStore.dynamicIslandCornerRadius.coerceIn(18, 42).dp
     val rawPillCornerRadius by animateDpAsState(
-        targetValue = if (isExpanded) 30.dp else (baseCornerRadius * manualScaleFactor).coerceIn(18.dp, 42.dp),
+        targetValue = if (isExpanded) 28.dp else (baseCornerRadius * manualScaleFactor).coerceIn(18.dp, 42.dp),
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMediumLow,
+            stiffness = Spring.StiffnessMedium,
         ),
         label = "island-corner-radius",
     )
-    val pillCornerRadius = rawPillCornerRadius.coerceIn(12.dp, 48.dp)
+    val pillCornerRadius = rawPillCornerRadius.coerceIn(14.dp, 44.dp)
 
     val activeStatusColor by animateColorAsState(
         targetValue = when (state) {
@@ -332,7 +294,7 @@ fun DynamicIsland(
             ConnectionState.CONNECTING -> statusColors.connecting
             ConnectionState.DISCONNECTED -> neu.accent
         },
-        animationSpec = tween(350),
+        animationSpec = tween(300),
         label = "island-status-color",
     )
 
@@ -346,6 +308,17 @@ fun DynamicIsland(
         DynamicIslandCustomizationModal(
             settingsStore = settingsStore,
             onDismiss = { showCustomizeModal = false },
+        )
+    }
+
+    if (showDirectAppPicker && !isSystemOverlay) {
+        DynamicIslandAppPickerDialog(
+            current = settingsStore.dynamicIslandPinnedApps,
+            onDismiss = { showDirectAppPicker = false },
+            onConfirm = { updatedSet ->
+                settingsStore.dynamicIslandPinnedApps = updatedSet
+                showDirectAppPicker = false
+            },
         )
     }
 
@@ -374,19 +347,13 @@ fun DynamicIsland(
         Modifier
     }
 
-    // Generous outer padding prevents any shadow/glow/LED clipping on system overlays
     Box(
         modifier = modifier
             .then(if (isSystemOverlay) Modifier else Modifier.fillMaxWidth())
-            .padding(horizontal = 14.dp, vertical = 10.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = alignment,
     ) {
         val shape = RoundedCornerShape(pillCornerRadius)
-        val effectiveGlowAlpha = when {
-            !settingsStore.dynamicIslandAnimation -> 0.12f
-            state == ConnectionState.CONNECTED || state == ConnectionState.CONNECTING -> glowPulse
-            else -> 0.10f
-        }
 
         val smoothOffsetX by animateFloatAsState(
             targetValue = inAppOffsetX.takeIf { it.isFinite() }?.coerceIn(-360f, 360f) ?: 0f,
@@ -405,8 +372,14 @@ fun DynamicIsland(
             label = "island-smooth-drag-y",
         )
 
-        val effectiveMaxWidth = if (isExpanded) maxOf(440.dp, scaledMinWidth + 16.dp) else maxOf(scaledMaxCollapsedWidth, scaledMinWidth + 8.dp)
+        val effectiveMaxWidth = if (isExpanded) {
+            maxOf(460.dp, scaledMinWidth + 24.dp)
+        } else {
+            maxOf(scaledMaxCollapsedWidth, scaledMinWidth + 8.dp)
+        }
 
+        // Clean hardware-accelerated Dynamic Island container:
+        // No BlurMaskFilter or duplicate .animateContentSize() -> zero dark corner artifacts and zero expand lag!
         Box(
             modifier = Modifier
                 .then(
@@ -424,19 +397,7 @@ fun DynamicIsland(
                     min = scaledMinWidth,
                     max = effectiveMaxWidth,
                 )
-                .heightIn(min = if (isExpanded) maxOf(164.dp, scaledMinHeight) else scaledMinHeight)
-                .animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = 0.78f,
-                        stiffness = Spring.StiffnessMediumLow,
-                    ),
-                )
-                .nativeIslandDropShadow(
-                    cornerRadius = pillCornerRadius,
-                    shadowElevation = if (isExpanded) 12.dp else 7.dp,
-                    glowColor = activeStatusColor,
-                    glowAlpha = effectiveGlowAlpha,
-                )
+                .heightIn(min = scaledMinHeight)
                 .dynamicIslandMotionEffect(
                     enabled = settingsStore.dynamicIslandAnimation && !settingsStore.batterySaverModeEnabled,
                     style = settingsStore.dynamicIslandMotionStyle,
@@ -457,24 +418,24 @@ fun DynamicIsland(
                         settingsStore.dynamicIslandLedSpeed
                     },
                     cornerRadius = pillCornerRadius,
-                    borderWidth = if (isExpanded) 2.6.dp else 2.2.dp,
-                    glowRadius = if (isExpanded) 10.dp else 7.dp,
+                    borderWidth = if (isExpanded) 2.5.dp else 2.1.dp,
+                    glowRadius = if (isExpanded) 9.dp else 6.dp,
                 )
                 .border(
-                    width = if (settingsStore.dynamicIslandLedBorderEnabled) 0.dp else 1.dp,
+                    width = if (settingsStore.dynamicIslandLedBorderEnabled) 0.dp else 1.2.dp,
                     brush = Brush.verticalGradient(
                         colors = when (state) {
                             ConnectionState.CONNECTED -> listOf(
-                                statusColors.connected.copy(alpha = 0.52f),
-                                statusColors.connected.copy(alpha = 0.16f),
+                                statusColors.connected.copy(alpha = 0.58f),
+                                statusColors.connected.copy(alpha = 0.18f),
                             )
                             ConnectionState.CONNECTING -> listOf(
-                                statusColors.connecting.copy(alpha = 0.52f),
-                                statusColors.connecting.copy(alpha = 0.16f),
+                                statusColors.connecting.copy(alpha = 0.58f),
+                                statusColors.connecting.copy(alpha = 0.18f),
                             )
                             ConnectionState.DISCONNECTED -> listOf(
-                                Color.White.copy(alpha = if (islandTheme == SettingsStore.DynamicIslandTheme.NEUMORPHIC && !neu.isDark) 0.85f else 0.18f),
-                                Color.White.copy(alpha = 0.04f),
+                                Color.White.copy(alpha = if (islandTheme == SettingsStore.DynamicIslandTheme.NEUMORPHIC && !neu.isDark) 0.90f else 0.22f),
+                                Color.White.copy(alpha = 0.06f),
                             )
                         },
                     ),
@@ -488,34 +449,45 @@ fun DynamicIsland(
                     isExpanded = !isExpanded
                 }
                 .padding(
-                    horizontal = if (isExpanded) 20.dp else (16.dp * manualScaleFactor).coerceIn(12.dp, 22.dp),
-                    vertical = if (isExpanded) 18.dp else (9.dp * manualScaleFactor).coerceIn(7.dp, 14.dp),
+                    horizontal = if (isExpanded) 18.dp else (16.dp * manualScaleFactor).coerceIn(12.dp, 22.dp),
+                    vertical = if (isExpanded) 16.dp else (9.dp * manualScaleFactor).coerceIn(7.dp, 14.dp),
                 ),
             contentAlignment = Alignment.Center,
         ) {
             AnimatedContent(
                 targetState = isExpanded,
                 transitionSpec = {
-                    (fadeIn(tween(240, easing = FastOutSlowInEasing)) +
+                    (fadeIn(tween(190, easing = FastOutSlowInEasing)) +
                         scaleIn(
-                            initialScale = 0.92f,
+                            initialScale = 0.95f,
                             animationSpec = spring(
-                                dampingRatio = 0.76f,
-                                stiffness = Spring.StiffnessMediumLow,
+                                dampingRatio = 0.88f,
+                                stiffness = 420f,
                             ),
                         ))
                         .togetherWith(
-                            fadeOut(tween(160)) +
+                            fadeOut(tween(130)) +
                                 scaleOut(
-                                    targetScale = 0.94f,
-                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                    targetScale = 0.96f,
+                                    animationSpec = spring(
+                                        dampingRatio = 0.90f,
+                                        stiffness = 460f,
+                                    ),
                                 )
+                        )
+                        .using(
+                            SizeTransform(clip = true) { _, _ ->
+                                spring(
+                                    dampingRatio = 0.88f,
+                                    stiffness = 410f,
+                                )
+                            }
                         )
                 },
                 label = "island-expand-collapse",
             ) { expanded ->
                 if (!expanded) {
-                    // Collapsed Native Dynamic Island Pill with Signal Tower Wave & Customizable Telemetry
+                    // Collapsed Dynamic Island Pill
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.Center,
@@ -638,16 +610,6 @@ fun DynamicIsland(
                                         maxLines = 1,
                                     )
                                 }
-                                if (settingsStore.dynamicIslandShowSessionData) {
-                                    val totalBytes = liveStats.totalRxBytes + liveStats.totalTxBytes
-                                    Spacer(Modifier.width(6.dp))
-                                    Text(
-                                        text = s.language.formatBytesLocalized(totalBytes),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = fonts.monoFont),
-                                        color = contentColor.copy(alpha = 0.78f),
-                                        maxLines = 1,
-                                    )
-                                }
                             }
                             ConnectionState.CONNECTING -> {
                                 Text(
@@ -731,6 +693,7 @@ fun DynamicIsland(
                                         style = MaterialTheme.typography.titleSmall.copy(
                                             fontFamily = fonts.headingFont,
                                             fontWeight = FontWeight.Bold,
+                                            lineHeight = 20.sp,
                                         ),
                                         color = contentColor,
                                         maxLines = 1,
@@ -744,13 +707,17 @@ fun DynamicIsland(
                                                 ConnectionState.CONNECTING -> s.islandSecuringConnection
                                                 ConnectionState.DISCONNECTED -> s.islandProtectedReady
                                             },
-                                            style = MaterialTheme.typography.bodySmall.copy(fontFamily = fonts.bodyFont),
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                fontFamily = fonts.bodyFont,
+                                                lineHeight = 18.sp,
+                                            ),
                                             color = when (state) {
                                                 ConnectionState.CONNECTED -> statusColors.connected
                                                 ConnectionState.CONNECTING -> statusColors.connecting
                                                 ConnectionState.DISCONNECTED -> contentColor.copy(alpha = 0.65f)
                                             },
                                             maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
                                         )
                                         if (settingsStore.dynamicIslandShowIpBadge && selectedProxy != null) {
                                             Spacer(Modifier.width(6.dp))
@@ -772,7 +739,7 @@ fun DynamicIsland(
                                 if (!isSystemOverlay) {
                                     Box(
                                         modifier = Modifier
-                                            .size(30.dp)
+                                            .size(32.dp)
                                             .clip(CircleShape)
                                             .background(contentColor.copy(alpha = 0.12f))
                                             .clickable { showCustomizeModal = true },
@@ -781,7 +748,7 @@ fun DynamicIsland(
                                         Icon(
                                             imageVector = Icons.Filled.Tune,
                                             contentDescription = s.islandCustomizeButton,
-                                            tint = contentColor.copy(alpha = 0.85f),
+                                            tint = contentColor.copy(alpha = 0.88f),
                                             modifier = Modifier.size(16.dp),
                                         )
                                     }
@@ -789,7 +756,7 @@ fun DynamicIsland(
                                 }
                                 Box(
                                     modifier = Modifier
-                                        .size(30.dp)
+                                        .size(32.dp)
                                         .clip(CircleShape)
                                         .background(contentColor.copy(alpha = 0.10f))
                                         .clickable { isExpanded = false },
@@ -798,111 +765,123 @@ fun DynamicIsland(
                                     Icon(
                                         imageVector = Icons.Filled.KeyboardArrowUp,
                                         contentDescription = null,
-                                        tint = contentColor.copy(alpha = 0.8f),
+                                        tint = contentColor.copy(alpha = 0.85f),
                                         modifier = Modifier.size(18.dp),
                                     )
                                 }
                             }
                         }
 
-                        Spacer(Modifier.height(14.dp))
-
-                        // Telemetry Grid
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                        ) {
+                        // Spacious 2x2 Telemetry Cards Grid (No text cramping, wrapping, or bottom-line clipping!)
+                        val telemetryCards = buildList {
                             if (settingsStore.dynamicIslandShowPing) {
-                                Column(modifier = Modifier.weight(0.9f)) {
-                                    Text(
-                                        text = s.islandLatency,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = fonts.bodyFont),
-                                        color = contentColor.copy(alpha = 0.62f),
+                                add(
+                                    IslandTelemetryCardItem(
+                                        label = s.islandLatency,
+                                        value = pingLatency?.let { s.language.formatPingLocalized(it) } ?: "\u2014",
+                                        valueColor = if (pingLatency != null) statusColors.connected else contentColor,
                                     )
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = pingLatency?.let { s.language.formatPingLocalized(it) } ?: "\u2014",
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFamily = fonts.monoFont,
-                                            fontWeight = FontWeight.Bold,
-                                        ),
-                                        color = if (pingLatency != null) statusColors.connected else contentColor,
-                                    )
-                                }
+                                )
                             }
-
                             if (settingsStore.dynamicIslandShowTimer) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = s.islandDuration,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = fonts.bodyFont),
-                                        color = contentColor.copy(alpha = 0.62f),
-                                    )
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = if (state == ConnectionState.CONNECTED) {
+                                add(
+                                    IslandTelemetryCardItem(
+                                        label = s.islandDuration,
+                                        value = if (state == ConnectionState.CONNECTED) {
                                             s.language.formatDurationLocalized(elapsedSeconds, alwaysShowHours = true)
                                         } else {
                                             s.language.formatDurationLocalized(0L, alwaysShowHours = true)
                                         },
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFamily = fonts.monoFont,
-                                            fontWeight = FontWeight.Bold,
-                                            fontFeatureSettings = "tnum",
-                                        ),
-                                        color = contentColor,
+                                        valueColor = contentColor,
                                     )
-                                }
+                                )
                             }
-
                             if (settingsStore.dynamicIslandShowSessionData) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = s.dataUsedLabel,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = fonts.bodyFont),
-                                        color = contentColor.copy(alpha = 0.62f),
-                                        maxLines = 1,
+                                add(
+                                    IslandTelemetryCardItem(
+                                        label = s.dataUsedLabel,
+                                        value = s.language.formatBytesLocalized(liveStats.totalRxBytes + liveStats.totalTxBytes),
+                                        valueColor = contentColor,
                                     )
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(
-                                        text = s.language.formatBytesLocalized(liveStats.totalRxBytes + liveStats.totalTxBytes),
-                                        style = MaterialTheme.typography.bodyMedium.copy(
-                                            fontFamily = fonts.monoFont,
-                                            fontWeight = FontWeight.Bold,
-                                        ),
-                                        color = contentColor,
-                                        maxLines = 1,
-                                    )
-                                }
+                                )
                             }
-
                             if (settingsStore.dynamicIslandShowSpeed) {
-                                Column(modifier = Modifier.weight(1.35f)) {
-                                    Text(
-                                        text = s.islandLiveSpeed,
-                                        style = MaterialTheme.typography.labelSmall.copy(fontFamily = fonts.bodyFont),
-                                        color = contentColor.copy(alpha = 0.62f),
+                                val tx = s.language.formatSpeedLocalized(liveStats.txRateBytesPerSec)
+                                val rx = s.language.formatSpeedLocalized(liveStats.rxRateBytesPerSec)
+                                add(
+                                    IslandTelemetryCardItem(
+                                        label = s.islandLiveSpeed,
+                                        value = "↓$rx  ↑$tx",
+                                        valueColor = if (state == ConnectionState.CONNECTED) statusColors.connected else contentColor,
                                     )
-                                    Spacer(Modifier.height(4.dp))
-                                    val tx = s.language.formatSpeedLocalized(liveStats.txRateBytesPerSec)
-                                    val rx = s.language.formatSpeedLocalized(liveStats.rxRateBytesPerSec)
-                                    Text(
-                                        text = "↑$tx  ↓$rx",
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontFamily = fonts.monoFont,
-                                            fontWeight = FontWeight.SemiBold,
-                                        ),
-                                        color = contentColor,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                    )
+                                )
+                            }
+                        }
+
+                        if (telemetryCards.isNotEmpty()) {
+                            Spacer(Modifier.height(12.dp))
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                telemetryCards.chunked(2).forEach { rowItems ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    ) {
+                                        rowItems.forEach { item ->
+                                            Column(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .clip(RoundedCornerShape(14.dp))
+                                                    .background(contentColor.copy(alpha = 0.08f))
+                                                    .border(
+                                                        width = 0.8.dp,
+                                                        color = contentColor.copy(alpha = 0.10f),
+                                                        shape = RoundedCornerShape(14.dp),
+                                                    )
+                                                    .padding(horizontal = 12.dp, vertical = 9.dp),
+                                            ) {
+                                                Text(
+                                                    text = item.label,
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontFamily = fonts.bodyFont,
+                                                        fontWeight = FontWeight.Medium,
+                                                        lineHeight = 17.sp,
+                                                    ),
+                                                    color = contentColor.copy(alpha = 0.68f),
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.padding(bottom = 3.dp),
+                                                )
+                                                Text(
+                                                    text = item.value,
+                                                    style = MaterialTheme.typography.bodyMedium.copy(
+                                                        fontFamily = fonts.monoFont,
+                                                        fontWeight = FontWeight.Bold,
+                                                        fontSize = 13.sp,
+                                                        lineHeight = 19.sp,
+                                                        fontFeatureSettings = "tnum",
+                                                    ),
+                                                    color = item.valueColor,
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    overflow = TextOverflow.Ellipsis,
+                                                    modifier = Modifier.padding(vertical = 1.dp),
+                                                )
+                                            }
+                                        }
+                                        if (rowItems.size == 1) {
+                                            Spacer(Modifier.weight(1f))
+                                        }
+                                    }
                                 }
                             }
                         }
 
-                        // Pinned Quick-Launch Apps Row
+                        // Pinned Quick-Launch Apps Row (Respects dynamicIslandShowQuickApps toggle + supports adding new apps)
                         AnimatedVisibility(
-                            visible = pinnedApps.isNotEmpty() || !isSystemOverlay,
+                            visible = settingsStore.dynamicIslandShowQuickApps && (pinnedApps.isNotEmpty() || !isSystemOverlay),
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically(),
                         ) {
@@ -927,10 +906,19 @@ fun DynamicIsland(
                                                             launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                                                             context.startActivity(launchIntent)
                                                             isExpanded = false
+                                                        } else {
+                                                            val fallbackUrl = KNOWN_APP_WEB_FALLBACKS[appItem.packageName]
+                                                            if (fallbackUrl != null) {
+                                                                val webIntent = Intent(Intent.ACTION_VIEW, Uri.parse(fallbackUrl)).apply {
+                                                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                                                }
+                                                                context.startActivity(webIntent)
+                                                                isExpanded = false
+                                                            }
                                                         }
                                                     }
                                                 }
-                                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                                .padding(horizontal = 11.dp, vertical = 7.dp),
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -946,6 +934,7 @@ fun DynamicIsland(
                                                     style = MaterialTheme.typography.labelSmall.copy(
                                                         fontFamily = fonts.bodyFont,
                                                         fontWeight = FontWeight.SemiBold,
+                                                        lineHeight = 16.sp,
                                                     ),
                                                     color = contentColor,
                                                     maxLines = 1,
@@ -955,17 +944,48 @@ fun DynamicIsland(
                                     }
 
                                     if (!isSystemOverlay) {
+                                        // Direct "+ Add App" button right inside the quick-apps bar
                                         Box(
                                             modifier = Modifier
                                                 .clip(RoundedCornerShape(12.dp))
-                                                .background(neu.accent.copy(alpha = 0.18f))
-                                                .clickable { showCustomizeModal = true }
-                                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                                                .background(neu.accent.copy(alpha = 0.22f))
+                                                .clickable { showDirectAppPicker = true }
+                                                .padding(horizontal = 11.dp, vertical = 7.dp),
                                             contentAlignment = Alignment.Center,
                                         ) {
                                             Row(verticalAlignment = Alignment.CenterVertically) {
                                                 Icon(
                                                     imageVector = Icons.Filled.Add,
+                                                    contentDescription = s.islandAddAppsButton,
+                                                    tint = contentColor,
+                                                    modifier = Modifier.size(14.dp),
+                                                )
+                                                Spacer(Modifier.width(4.dp))
+                                                Text(
+                                                    text = s.islandAddAppsButton,
+                                                    style = MaterialTheme.typography.labelSmall.copy(
+                                                        fontFamily = fonts.bodyFont,
+                                                        fontWeight = FontWeight.Bold,
+                                                        lineHeight = 16.sp,
+                                                    ),
+                                                    color = contentColor,
+                                                    maxLines = 1,
+                                                )
+                                            }
+                                        }
+
+                                        // Customize Island Studio button
+                                        Box(
+                                            modifier = Modifier
+                                                .clip(RoundedCornerShape(12.dp))
+                                                .background(contentColor.copy(alpha = 0.12f))
+                                                .clickable { showCustomizeModal = true }
+                                                .padding(horizontal = 11.dp, vertical = 7.dp),
+                                            contentAlignment = Alignment.Center,
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Icon(
+                                                    imageVector = Icons.Filled.Tune,
                                                     contentDescription = s.islandCustomizeButton,
                                                     tint = contentColor,
                                                     modifier = Modifier.size(14.dp),
@@ -975,7 +995,8 @@ fun DynamicIsland(
                                                     text = s.islandCustomizeButton,
                                                     style = MaterialTheme.typography.labelSmall.copy(
                                                         fontFamily = fonts.bodyFont,
-                                                        fontWeight = FontWeight.Bold,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        lineHeight = 16.sp,
                                                     ),
                                                     color = contentColor,
                                                     maxLines = 1,
@@ -1025,7 +1046,7 @@ fun DynamicIsland(
                                     .clip(RoundedCornerShape(14.dp))
                                     .background(
                                         if (state == ConnectionState.CONNECTED) statusColors.connected.copy(alpha = 0.24f)
-                                        else neu.accent.copy(alpha = 0.28f),
+                                        else neu.accent.copy(alpha = 0.30f),
                                     )
                                     .clickable {
                                         isExpanded = false
@@ -1058,12 +1079,6 @@ fun DynamicIsland(
 
 /**
  * Full Dynamic Island Customization Studio Modal (accessible from Dynamic Island & Settings).
- * Includes:
- * 1. Linear manual size slider from 0% to 100%
- * 2. Automotive RGB Chasing LED Border toggle, 5 color style chips, and speed slider
- * 3. Touch-Drag repositioning toggle & Reset Position action
- * 4. Granular content visibility switches (Signal Tower Wave, Timer, Live Speed, Ping, Flag, Server Name, Session Data, Protocol Badge)
- * 5. App shortcut selector to add/remove specific apps inside the Dynamic Island
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1082,6 +1097,7 @@ fun DynamicIslandCustomizationModal(
     var ledSpeed by remember { mutableFloatStateOf(settingsStore.dynamicIslandLedSpeed) }
     var draggable by remember { mutableStateOf(settingsStore.dynamicIslandDraggable) }
 
+    var showQuickApps by remember { mutableStateOf(settingsStore.dynamicIslandShowQuickApps) }
     var showTowerWave by remember { mutableStateOf(settingsStore.dynamicIslandShowTowerWave) }
     var showTimer by remember { mutableStateOf(settingsStore.dynamicIslandShowTimer) }
     var showSpeed by remember { mutableStateOf(settingsStore.dynamicIslandShowSpeed) }
@@ -1200,7 +1216,57 @@ fun DynamicIslandCustomizationModal(
                     modifier = Modifier.padding(vertical = 14.dp),
                 )
 
-                // 2. Automotive RGB Chasing LED Border Controls
+                // 2. Dynamic Island Motion & Physics Animation Selector (12 Styles)
+                Text(
+                    text = s.islandMotionStyleTitle,
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontFamily = fonts.headingFont,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    color = neu.textPrimary,
+                )
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = s.islandMotionStyleSub,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = fonts.bodyFont),
+                    color = neu.textSecondary,
+                )
+                Spacer(Modifier.height(8.dp))
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    DynamicIslandMotionStyle.entries.forEach { item ->
+                        val selected = motionStyle == item
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (selected) neu.accent else neu.accent.copy(alpha = 0.12f))
+                                .clickable {
+                                    motionStyle = item
+                                    settingsStore.dynamicIslandMotionStyle = item
+                                }
+                                .padding(horizontal = 10.dp, vertical = 6.dp),
+                        ) {
+                            Text(
+                                text = item.localizedLabel(s.language),
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = fonts.headingFont,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                color = if (selected) Color.White else neu.textPrimary,
+                            )
+                        }
+                    }
+                }
+
+                HorizontalDivider(
+                    color = neu.textSecondary.copy(alpha = 0.14f),
+                    modifier = Modifier.padding(vertical = 14.dp),
+                )
+
+                // 3. Automotive RGB Chasing LED Border Controls
                 IslandModalSwitchRow(
                     title = s.islandLedBorderTitle,
                     checked = ledEnabled,
@@ -1265,7 +1331,7 @@ fun DynamicIslandCustomizationModal(
                             color = neu.textPrimary,
                         )
                         Text(
-                            text = "${s.language.formatPercentLocalized((ledSpeed * 100).roundToInt())}",
+                            text = s.language.formatPercentLocalized((ledSpeed * 100).roundToInt()),
                             style = MaterialTheme.typography.labelSmall.copy(fontFamily = fonts.monoFont),
                             color = neu.accent,
                         )
@@ -1289,7 +1355,7 @@ fun DynamicIslandCustomizationModal(
                     modifier = Modifier.padding(vertical = 14.dp),
                 )
 
-                // 3. Touch-Drag Free Repositioning & Reset Position
+                // 4. Touch-Drag Free Repositioning & Reset Position
                 IslandModalSwitchRow(
                     title = s.islandDraggableTitle,
                     checked = draggable,
@@ -1339,47 +1405,48 @@ fun DynamicIslandCustomizationModal(
                     modifier = Modifier.padding(vertical = 14.dp),
                 )
 
-                // 4. Pinned Quick-Launch Apps
-                Text(
-                    text = s.islandPinnedAppsTitle,
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontFamily = fonts.headingFont,
-                        fontWeight = FontWeight.Bold,
-                    ),
-                    color = neu.textPrimary,
+                // 5. Pinned Quick-Launch Apps (Enable/Disable Toggle + Manage/Add Apps)
+                IslandModalSwitchRow(
+                    title = s.islandShowQuickAppsTitle,
+                    checked = showQuickApps,
+                    onCheckedChange = {
+                        showQuickApps = it
+                        settingsStore.dynamicIslandShowQuickApps = it
+                    },
                 )
-                Spacer(Modifier.height(4.dp))
                 Text(
-                    text = s.islandPinnedAppsSub,
+                    text = s.islandShowQuickAppsSub,
                     style = MaterialTheme.typography.bodySmall.copy(fontFamily = fonts.bodyFont),
                     color = neu.textSecondary,
                 )
-                Spacer(Modifier.height(10.dp))
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(14.dp))
-                        .background(neu.accent.copy(alpha = 0.14f))
-                        .clickable { showAppPicker = true }
-                        .padding(vertical = 12.dp, horizontal = 14.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Filled.Apps,
-                            contentDescription = null,
-                            tint = neu.accent,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "${s.islandAddAppsButton} (${s.language.formatPercentLocalized(pinnedApps.size).replace("٪", "").replace("%", "")})",
-                            style = MaterialTheme.typography.labelLarge.copy(
-                                fontFamily = fonts.headingFont,
-                                fontWeight = FontWeight.Bold,
-                            ),
-                            color = neu.accent,
-                        )
+                if (showQuickApps) {
+                    Spacer(Modifier.height(10.dp))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(14.dp))
+                            .background(neu.accent.copy(alpha = 0.14f))
+                            .clickable { showAppPicker = true }
+                            .padding(vertical = 12.dp, horizontal = 14.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Apps,
+                                contentDescription = null,
+                                tint = neu.accent,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = "${s.islandAddAppsButton} (${s.language.formatPercentLocalized(pinnedApps.size).replace("٪", "").replace("%", "")})",
+                                style = MaterialTheme.typography.labelLarge.copy(
+                                    fontFamily = fonts.headingFont,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                color = neu.accent,
+                            )
+                        }
                     }
                 }
 
@@ -1388,7 +1455,7 @@ fun DynamicIslandCustomizationModal(
                     modifier = Modifier.padding(vertical = 14.dp),
                 )
 
-                // 5. Granular Displayed Content Toggles
+                // 6. Granular Displayed Content Toggles
                 Text(
                     text = s.islandContentSectionTitle,
                     style = MaterialTheme.typography.labelSmall.copy(
@@ -1512,6 +1579,7 @@ private fun IslandModalSwitchRow(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DynamicIslandAppPickerDialog(
     current: Set<String>,
@@ -1520,20 +1588,35 @@ fun DynamicIslandAppPickerDialog(
 ) {
     val context = LocalContext.current
     val s = currentFoxyStrings
+    val neu = currentNeumorphicColors
+    val fonts = currentFoxyFonts
     var selected by remember { mutableStateOf(current) }
     var searchQuery by remember { mutableStateOf("") }
 
+    // Query ALL launchable apps on the device (including pre-installed YouTube, Chrome, etc.)
+    // plus merge known popular presets so the user can always toggle YouTube, Telegram, Chrome, Instagram, WhatsApp, X, Spotify, etc.
     val installedApps by produceState<List<IslandPinnedAppInfo>>(initialValue = emptyList()) {
         value = withContext(Dispatchers.IO) {
             val pm = context.packageManager
-            val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            packages
-                .filter {
-                    (it.flags and ApplicationInfo.FLAG_SYSTEM == 0 || it.packageName == "com.android.chrome") &&
-                        pm.getLaunchIntentForPackage(it.packageName) != null
+            val launcherIntent = Intent(Intent.ACTION_MAIN, null).addCategory(Intent.CATEGORY_LAUNCHER)
+            val resolved = runCatching { pm.queryIntentActivities(launcherIntent, 0) }.getOrDefault(emptyList())
+            val fromDevice = resolved
+                .mapNotNull { resolveInfo ->
+                    val pkg = resolveInfo.activityInfo?.packageName ?: return@mapNotNull null
+                    if (pkg == context.packageName) return@mapNotNull null
+                    val label = runCatching { resolveInfo.loadLabel(pm).toString() }.getOrDefault(pkg)
+                    IslandPinnedAppInfo(pkg, label)
                 }
-                .map { IslandPinnedAppInfo(it.packageName, pm.getApplicationLabel(it).toString()) }
-                .sortedBy { it.label.lowercase() }
+                .distinctBy { it.packageName }
+
+            val presetExtras = KNOWN_APP_FALLBACK_LABELS.entries
+                .filter { (pkg, _) -> fromDevice.none { it.packageName == pkg } }
+                .map { (pkg, label) -> IslandPinnedAppInfo(pkg, label) }
+
+            (presetExtras + fromDevice).sortedWith(
+                compareByDescending<IslandPinnedAppInfo> { KNOWN_APP_FALLBACK_LABELS.containsKey(it.packageName) }
+                    .thenBy { it.label.lowercase() }
+            )
         }
     }
 
@@ -1547,9 +1630,69 @@ fun DynamicIslandAppPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(s.islandPinnedAppsTitle) },
+        title = {
+            Column {
+                Text(
+                    text = s.islandPinnedAppsTitle,
+                    style = MaterialTheme.typography.titleMedium.copy(
+                        fontFamily = fonts.headingFont,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = s.islandPinnedAppsSub,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = fonts.bodyFont),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
         text = {
-            Column(Modifier.height(380.dp)) {
+            Column(Modifier.height(420.dp)) {
+                // Quick Popular App Chips
+                Text(
+                    text = when (s.language) {
+                        AppLanguage.FA -> "برنامه‌های محبوب (انتخاب سریع):"
+                        AppLanguage.AR -> "التطبيقات الشائعة (اختيار سريع):"
+                        AppLanguage.EN -> "Popular Quick Shortcuts:"
+                    },
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        fontFamily = fonts.headingFont,
+                        fontWeight = FontWeight.Bold,
+                    ),
+                    color = neu.textSecondary,
+                    modifier = Modifier.padding(bottom = 6.dp),
+                )
+                FlowRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    KNOWN_APP_FALLBACK_LABELS.forEach { (pkg, label) ->
+                        val isPinned = selected.contains(pkg)
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(10.dp))
+                                .background(if (isPinned) neu.accent else neu.accent.copy(alpha = 0.12f))
+                                .clickable {
+                                    selected = if (isPinned) selected - pkg else selected + pkg
+                                }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                        ) {
+                            Text(
+                                text = if (isPinned) "✓ $label" else "+ $label",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = fonts.headingFont,
+                                    fontWeight = FontWeight.Bold,
+                                ),
+                                color = if (isPinned) Color.White else neu.textPrimary,
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
@@ -1602,7 +1745,7 @@ fun DynamicIslandAppPickerDialog(
         },
         confirmButton = {
             TextButton(onClick = { onConfirm(selected) }) {
-                Text(s.save)
+                Text(s.save, fontWeight = FontWeight.Bold)
             }
         },
         dismissButton = {
@@ -1612,3 +1755,4 @@ fun DynamicIslandAppPickerDialog(
         },
     )
 }
+

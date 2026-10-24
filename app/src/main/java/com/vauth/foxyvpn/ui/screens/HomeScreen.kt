@@ -72,20 +72,32 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Waves
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.vauth.foxyvpn.FoxyVpnApp
+import com.vauth.foxyvpn.R
 import com.vauth.foxyvpn.data.GUARDIAN_ENDPOINT_DEFAULT
 import com.vauth.foxyvpn.data.RECOMMENDED_COUNTRY_CODE
 import com.vauth.foxyvpn.data.ServerListClient
@@ -301,65 +313,101 @@ fun HomeScreen(
                 Spacer(Modifier.height(6.dp))
 
                 // 3. REDESIGNED HEADER & BRANDING:
-                // Row 1: Single-line FoxyVpn Brand Title (Never wraps)
-                // Row 2: Control Icons (Theme, Speed Test, Language Switcher, Settings) ordered directly below
+                // Top-Left Corner (LTR): [Clean 42.dp App Icon] + [Foxy vpn in Amsterdam Signature Style]
+                // Generous spacing separating the brand lockup from the 42.dp uniform control buttons
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Box(
+                    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                        Row(
                             modifier = Modifier
-                                .size(38.dp)
-                                .subtleFloatAnimation(amplitudePx = 4f, durationMs = 2400)
-                                .clip(CircleShape)
-                                .background(
-                                    if (state == ConnectionState.CONNECTED) statusColors.connected.copy(alpha = 0.20f)
-                                    else neu.accent.copy(alpha = 0.18f),
-                                ),
-                            contentAlignment = Alignment.Center,
+                                .fillMaxWidth()
+                                .padding(horizontal = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
-                            Icon(
-                                imageVector = if (state == ConnectionState.CONNECTED) Icons.Filled.Security else Icons.Filled.Shield,
-                                contentDescription = null,
-                                tint = if (state == ConnectionState.CONNECTED) statusColors.connected else neu.accent,
-                                modifier = Modifier.size(21.dp),
-                            )
+                            // Top-Left Brand Lockup: First App Icon (42.dp), then "Foxy vpn" Amsterdam Signature
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                NeumorphicIconButton(
+                                    size = 42.dp,
+                                    onClick = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    },
+                                    modifier = Modifier.subtleFloatAnimation(amplitudePx = 3f, durationMs = 2600),
+                                ) {
+                                    Icon(
+                                        painter = painterResource(id = R.drawable.ic_foxy_logo_clean),
+                                        contentDescription = "Foxy vpn",
+                                        tint = Color.Unspecified,
+                                        modifier = Modifier.size(30.dp),
+                                    )
+                                }
+                                Spacer(Modifier.width(12.dp))
+                                Image(
+                                    painter = painterResource(id = R.drawable.foxy_brand_amsterdam),
+                                    contentDescription = "Foxy vpn",
+                                    colorFilter = ColorFilter.tint(neu.textPrimary),
+                                    contentScale = ContentScale.Fit,
+                                    alignment = Alignment.CenterStart,
+                                    modifier = Modifier
+                                        .height(40.dp)
+                                        .width(132.dp),
+                                )
+                            }
+
+                            // Active UI Design Style Quick Pill on the Right with clear separation from the brand lockup
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier
+                                    .neumorphicTouchBounce()
+                                    .clip(RoundedCornerShape(50))
+                                    .background(neu.accent.copy(alpha = 0.14f))
+                                    .border(1.dp, neu.accent.copy(alpha = 0.32f), RoundedCornerShape(50))
+                                    .clickable {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        themeController.cycleUiDesignStyle()
+                                    }
+                                    .padding(horizontal = 11.dp, vertical = 6.dp),
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Layers,
+                                    contentDescription = s.uiDesignStyleTitle,
+                                    tint = neu.accent,
+                                    modifier = Modifier.size(14.dp),
+                                )
+                                Spacer(Modifier.width(5.dp))
+                                Text(
+                                    text = themeController.uiDesignStyle.localizedLabel(s.language),
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontFamily = fonts.headingFont,
+                                        fontWeight = FontWeight.ExtraBold,
+                                    ),
+                                    color = neu.accent,
+                                    maxLines = 1,
+                                )
+                            }
                         }
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = "FoxyVpn",
-                            style = MaterialTheme.typography.headlineSmall.copy(
-                                fontFamily = fonts.headingFont,
-                                fontWeight = FontWeight.ExtraBold,
-                                letterSpacing = 0.4.sp,
-                            ),
-                            color = neu.textPrimary,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Visible,
-                        )
                     }
 
                     Spacer(Modifier.height(14.dp))
 
-                    // Ordered Control Row Directly Under Brand Name:
-                    // 1. Theme (Dark/Light)  2. Color Palette  3. Speed Test  4. Language Switcher  5. Settings
+                    // Control Icons Row with generous distance from the top-left brand lockup
+                    // Uniform 42.dp size matching the App Icon badge
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterHorizontally),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         // Control 1: Animated Day/Night Theme Toggle
                         val mode = themeController.mode
                         NeumorphicIconButton(
-                            size = 44.dp,
+                            size = 42.dp,
                             onClick = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 themeController.toggle(systemInDarkTheme)
@@ -383,15 +431,32 @@ fun HomeScreen(
                                     contentDescription = s.headerThemeButton,
                                     tint = if (targetMode == ThemeMode.LIGHT) Color(0xFFF59E0B) else neu.textPrimary,
                                     modifier = Modifier
-                                        .size(20.dp)
+                                        .size(19.dp)
                                         .graphicsLayer { rotationZ = themeIconRotation },
                                 )
                             }
                         }
 
-                        // Control 2: Color Palette Quick Switcher (6 User-Friendly Color Combinations)
+                        // Control 2: UI Design Style Switcher (Claymorphism, Dark Luxury, Neo-Brutalism, Bento UI, Editorial, Neumorphism)
                         NeumorphicIconButton(
-                            size = 44.dp,
+                            size = 42.dp,
+                            onClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                themeController.cycleUiDesignStyle()
+                            },
+                            modifier = Modifier.neumorphicTouchBounce(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.AutoAwesome,
+                                contentDescription = s.uiDesignStyleTitle,
+                                tint = neu.accent,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+
+                        // Control 3: Color Palette Quick Switcher (6 User-Friendly Color Combinations)
+                        NeumorphicIconButton(
+                            size = 42.dp,
                             onClick = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 themeController.cycleColorTheme()
@@ -402,13 +467,30 @@ fun HomeScreen(
                                 imageVector = Icons.Filled.Palette,
                                 contentDescription = s.colorPaletteTitle,
                                 tint = neu.accent,
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(19.dp),
                             )
                         }
 
-                        // Control 3: Speed Test
+                        // Control 4: Connection Wave Animation Switcher (5 Wave Styles)
                         NeumorphicIconButton(
-                            size = 44.dp,
+                            size = 42.dp,
+                            onClick = {
+                                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                themeController.cycleHeroWaveStyle()
+                            },
+                            modifier = Modifier.neumorphicTouchBounce(),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Waves,
+                                contentDescription = s.heroWaveStyleTitle,
+                                tint = neu.accent,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
+
+                        // Control 5: Speed Test
+                        NeumorphicIconButton(
+                            size = 42.dp,
                             onClick = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onOpenTools(0)
@@ -419,13 +501,13 @@ fun HomeScreen(
                                 imageVector = Icons.Filled.Speed,
                                 contentDescription = s.headerSpeedButton,
                                 tint = neu.accent,
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(19.dp),
                             )
                         }
 
-                        // Control 4: Animated Language Switcher (EN -> فا -> عر)
+                        // Control 6: Animated Language Switcher (EN -> فا -> عر)
                         NeumorphicIconButton(
-                            size = 44.dp,
+                            size = 42.dp,
                             onClick = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 languageController.toggle()
@@ -452,9 +534,9 @@ fun HomeScreen(
                             }
                         }
 
-                        // Control 5: Settings
+                        // Control 7: Settings
                         NeumorphicIconButton(
-                            size = 44.dp,
+                            size = 42.dp,
                             onClick = {
                                 haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                 onOpenSettings()
@@ -465,7 +547,7 @@ fun HomeScreen(
                                 imageVector = Icons.Filled.Settings,
                                 contentDescription = s.headerSettingsButton,
                                 tint = neu.textPrimary,
-                                modifier = Modifier.size(20.dp),
+                                modifier = Modifier.size(19.dp),
                             )
                         }
                     }
@@ -474,7 +556,7 @@ fun HomeScreen(
                 Spacer(Modifier.height(6.dp))
 
                 // 4. CONNECTION STATUS & TIMER HERO:
-                // Enlarged 236.dp 2026 Harmonic Wave Aura + Unconstrained Full-Width Single-Line "SECURE & CONNECTED" Badge
+                // Enlarged 320.dp Screen-Filling Harmonic Wave Aura + Full-Width Single-Line Status Badge
                 val statusText = when (state) {
                     ConnectionState.CONNECTED -> s.statusConnected
                     ConnectionState.CONNECTING -> s.statusConnecting
@@ -496,12 +578,13 @@ fun HomeScreen(
                         .fillMaxWidth()
                         .staggeredEntrance(0),
                 ) {
-                    // Enlarged 236.dp harmonic wave rings behind the timer & status badge
+                    // Enlarged 320.dp harmonic wave rings behind the timer & status badge
                     NeumorphicRadarPulse(
                         color = if (state == ConnectionState.DISCONNECTED) neu.accent else statusColor,
                         isActive = state == ConnectionState.CONNECTED,
                         isConnecting = state == ConnectionState.CONNECTING,
-                        size = 236.dp,
+                        size = 320.dp,
+                        waveStyle = themeController.heroWaveStyle,
                     )
 
                     // Overlay Column takes full width so SECURE & CONNECTED never truncates or wraps
@@ -666,7 +749,8 @@ fun HomeScreen(
                                 },
                                 cornerRadius = 20.dp,
                                 modifier = Modifier
-                                    .width(174.dp)
+                                    .width(206.dp)
+                                    .heightIn(min = 138.dp)
                                     .staggeredEntrance(idx + 2, delayPerItemMs = 50)
                                     .neumorphicTouchBounce(),
                             ) {

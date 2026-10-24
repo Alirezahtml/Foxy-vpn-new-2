@@ -74,11 +74,16 @@ private val AlmaraiLabelFamily = FontFamily(
     Font(R.font.almarai, FontWeight.Bold),
 )
 
+val AmsterdamSignatureFontFamily = FontFamily(
+    Font(R.font.alex_brush, FontWeight.Normal),
+)
+
 data class FoxyFontHierarchy(
     val headingFont: FontFamily,
     val bodyFont: FontFamily,
     val labelFont: FontFamily,
     val monoFont: FontFamily,
+    val brandSignatureFont: FontFamily = AmsterdamSignatureFontFamily,
 )
 
 val EnglishFontHierarchy = FoxyFontHierarchy(
@@ -86,6 +91,7 @@ val EnglishFontHierarchy = FoxyFontHierarchy(
     bodyFont = InterFamily,
     labelFont = JetBrainsMonoFamily,
     monoFont = JetBrainsMonoFamily,
+    brandSignatureFont = AmsterdamSignatureFontFamily,
 )
 
 val PersianFontHierarchy = FoxyFontHierarchy(
@@ -93,6 +99,7 @@ val PersianFontHierarchy = FoxyFontHierarchy(
     bodyFont = VazirmatnBodyFamily,
     labelFont = VazirmatnLabelFamily,
     monoFont = VazirmatnBodyFamily,
+    brandSignatureFont = AmsterdamSignatureFontFamily,
 )
 
 val ArabicFontHierarchy = FoxyFontHierarchy(
@@ -100,6 +107,7 @@ val ArabicFontHierarchy = FoxyFontHierarchy(
     bodyFont = ReadexProBodyFamily,
     labelFont = AlmaraiLabelFamily,
     monoFont = ReadexProBodyFamily,
+    brandSignatureFont = AmsterdamSignatureFontFamily,
 )
 
 fun fontHierarchyFor(language: AppLanguage): FoxyFontHierarchy = when (language) {

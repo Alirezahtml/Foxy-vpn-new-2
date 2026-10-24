@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.vauth.foxyvpn.data.DynamicIslandLedStyle
 import com.vauth.foxyvpn.data.DynamicIslandMotionStyle
+import com.vauth.foxyvpn.data.HeroWaveAnimationStyle
 import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import androidx.compose.runtime.mutableFloatStateOf
 import kotlinx.coroutines.delay
@@ -400,7 +401,7 @@ fun Modifier.automotiveLedBorder(
 }
 
 /**
- * 4c. Ultra-Smooth 8-Mode Dynamic Island Motion & Shader Physics Modifier
+ * 4c. Ultra-Smooth 12-Mode Dynamic Island Motion & Shader Physics Modifier
  * Combines 60/120Hz frame-synchronized motion physics + surface shaders so the Dynamic Island
  * feels alive, fluid, and responsive.
  */
@@ -488,6 +489,29 @@ fun Modifier.dynamicIslandMotionEffect(
                 DynamicIslandMotionStyle.STARLIGHT_ORBIT -> {
                     translationY = if (isExpanded) 0f else sin(phaseRad) * 2.0f
                 }
+                DynamicIslandMotionStyle.CYBER_GLITCH_PULSE -> {
+                    val microPulse = sin(phaseRad * 3f)
+                    val s = if (isExpanded) 1f else 1f + (if (microPulse > 0.85f) 0.016f else 0.004f * microPulse)
+                    scaleX = s
+                    scaleY = s
+                    translationX = if (isExpanded) 0f else (if (microPulse > 0.92f) 2.2f else 0f)
+                }
+                DynamicIslandMotionStyle.AURORA_WAVE_FLOW -> {
+                    translationY = if (isExpanded) 0f else sin(phaseRad) * 2.6f
+                    val s = if (isExpanded) 1f else 1f + 0.008f * cos(phaseRad)
+                    scaleX = s
+                    scaleY = s
+                }
+                DynamicIslandMotionStyle.GRAVITY_PENDULUM -> {
+                    rotationZ = if (isExpanded) 0f else sin(phaseRad) * 1.35f
+                    translationX = if (isExpanded) 0f else sin(phaseRad) * 3.4f
+                    translationY = if (isExpanded) 0f else abs(cos(phaseRad)) * 1.8f
+                }
+                DynamicIslandMotionStyle.QUANTUM_PARTICLES -> {
+                    val s = if (isExpanded) 1f else 1f + 0.010f * sin(phaseRad * 2f)
+                    scaleX = s
+                    scaleY = s
+                }
             }
         }
         .drawWithContent {
@@ -516,6 +540,36 @@ fun Modifier.dynamicIslandMotionEffect(
                         cornerRadius = CornerRadius(rPx, rPx),
                     )
                 }
+                DynamicIslandMotionStyle.AURORA_WAVE_FLOW -> {
+                    val shift = sin(phaseRad) * w * 0.3f
+                    drawRoundRect(
+                        brush = Brush.linearGradient(
+                            colors = listOf(
+                                Color(0xFF00F5D4).copy(alpha = 0.12f),
+                                accentColor.copy(alpha = 0.14f),
+                                Color(0xFFA855F7).copy(alpha = 0.12f),
+                            ),
+                            start = Offset(shift, 0f),
+                            end = Offset(w + shift, h),
+                        ),
+                        cornerRadius = CornerRadius(rPx, rPx),
+                    )
+                }
+                DynamicIslandMotionStyle.CYBER_GLITCH_PULSE -> {
+                    val scanY = (shimmerProgress * h).coerceIn(0f, h)
+                    drawRoundRect(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                accentColor.copy(alpha = 0.16f),
+                                Color.Transparent,
+                            ),
+                            startY = (scanY - 10.dp.toPx()).coerceAtLeast(0f),
+                            endY = (scanY + 10.dp.toPx()).coerceAtMost(h),
+                        ),
+                        cornerRadius = CornerRadius(rPx, rPx),
+                    )
+                }
                 DynamicIslandMotionStyle.BREATHING_HALO,
                 DynamicIslandMotionStyle.SONIC_WAVE_SYNC -> {
                     val inset = 1.5.dp.toPx()
@@ -530,18 +584,20 @@ fun Modifier.dynamicIslandMotionEffect(
                         )
                     }
                 }
-                DynamicIslandMotionStyle.STARLIGHT_ORBIT -> {
+                DynamicIslandMotionStyle.STARLIGHT_ORBIT,
+                DynamicIslandMotionStyle.QUANTUM_PARTICLES -> {
                     val cx = w / 2f
                     val cy = h / 2f
                     val rx = ((w / 2f) - 4.dp.toPx()).coerceAtLeast(1f)
                     val ry = ((h / 2f) - 4.dp.toPx()).coerceAtLeast(1f)
-                    for (idx in 0 until 4) {
-                        val a = phaseRad + idx * (PI.toFloat() / 2f)
-                        val px = cx + rx * cos(a)
-                        val py = cy + ry * sin(a)
+                    val count = if (style == DynamicIslandMotionStyle.QUANTUM_PARTICLES) 6 else 4
+                    for (idx in 0 until count) {
+                        val a = phaseRad * (if (idx % 2 == 0) 1f else -1.2f) + idx * (2f * PI.toFloat() / count)
+                        val px = cx + rx * cos(a) * (if (style == DynamicIslandMotionStyle.QUANTUM_PARTICLES) 0.92f else 1f)
+                        val py = cy + ry * sin(a) * (if (style == DynamicIslandMotionStyle.QUANTUM_PARTICLES) 0.85f else 1f)
                         drawCircle(
-                            color = accentColor.copy(alpha = 0.45f),
-                            radius = 4.2.dp.toPx(),
+                            color = accentColor.copy(alpha = 0.48f),
+                            radius = 4.0.dp.toPx(),
                             center = Offset(px, py),
                         )
                         drawCircle(
@@ -557,15 +613,15 @@ fun Modifier.dynamicIslandMotionEffect(
 }
 
 /**
- * 5. 2026-Trend Harmonic Fluid Wave Aura & Radar Pulse
- * Enlarged, multi-layered organic sine-modulated wave rings with ambient glow and orbital nodes.
+ * 5. Enlarged Screen-Spanning Multi-Mode Connection Wave & Radar Pulse (5 Distinct Styles)
  */
 @Composable
 fun NeumorphicRadarPulse(
     color: Color,
     isActive: Boolean,
     isConnecting: Boolean = false,
-    size: Dp = 236.dp,
+    size: Dp = 320.dp,
+    waveStyle: HeroWaveAnimationStyle = HeroWaveAnimationStyle.HARMONIC_ORBIT,
     modifier: Modifier = Modifier,
     centerContent: @Composable () -> Unit = {},
 ) {
@@ -574,7 +630,7 @@ fun NeumorphicRadarPulse(
         initialValue = 0f,
         targetValue = (2.0 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(if (isConnecting) 1500 else 3200, easing = LinearEasing),
+            animation = tween(if (isConnecting) 1400 else 3000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "wave-phase",
@@ -583,14 +639,14 @@ fun NeumorphicRadarPulse(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(if (isConnecting) 1300 else 2600, easing = LinearEasing),
+            animation = tween(if (isConnecting) 1250 else 2500, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "ripple-progress",
     )
     val breathScale by infinite.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
+        initialValue = 0.94f,
+        targetValue = 1.09f,
         animationSpec = infiniteRepeatable(
             animation = tween(2000, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse,
@@ -607,17 +663,17 @@ fun NeumorphicRadarPulse(
             val maxRadius = (this.size.minDimension / 2f)
             if (maxRadius <= 4f || !maxRadius.isFinite()) return@Canvas
 
-            // Ambient soft radial aura glow (2026 glass/neon depth)
+            // Ambient soft radial aura glow spanning almost full screen width
             val auraAlpha = when {
-                isActive -> 0.25f
-                isConnecting -> 0.22f
-                else -> 0.10f
+                isActive -> 0.28f
+                isConnecting -> 0.24f
+                else -> 0.12f
             }
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
                         color.copy(alpha = auraAlpha),
-                        color.copy(alpha = auraAlpha * 0.42f),
+                        color.copy(alpha = auraAlpha * 0.45f),
                         Color.Transparent,
                     ),
                     center = center,
@@ -627,67 +683,169 @@ fun NeumorphicRadarPulse(
                 center = center,
             )
 
-            // 4 Large Organic 2026 Harmonic Wave Layers
-            val layerCount = 4
-            for (layer in 0 until layerCount) {
-                val layerOffset = layer * 0.25f
-                val progress = (rippleProgress + layerOffset) % 1f
-                val baseR = maxRadius * (0.38f + 0.60f * progress)
-                val alphaEnvelope = sin(progress * PI.toFloat()).coerceIn(0f, 1f)
-                val ringAlpha = alphaEnvelope * (if (isActive || isConnecting) 0.56f else 0.24f)
+            when (waveStyle) {
+                HeroWaveAnimationStyle.HARMONIC_ORBIT -> {
+                    val layerCount = 5
+                    for (layer in 0 until layerCount) {
+                        val layerOffset = layer * 0.20f
+                        val progress = (rippleProgress + layerOffset) % 1f
+                        val baseR = maxRadius * (0.30f + 0.68f * progress)
+                        val alphaEnvelope = sin(progress * PI.toFloat()).coerceIn(0f, 1f)
+                        val ringAlpha = alphaEnvelope * (if (isActive || isConnecting) 0.62f else 0.28f)
 
-                val wavePath = Path()
-                val steps = 84
-                val lobeCount = if (layer % 2 == 0) 6 else 8
-                val amplitude = maxRadius * (if (isActive || isConnecting) 0.036f else 0.016f) * (1f + layer * 0.22f)
-                val dir = if (layer % 2 == 0) 1f else -1f
+                        val wavePath = Path()
+                        val steps = 88
+                        val lobeCount = if (layer % 2 == 0) 6 else 8
+                        val amplitude = maxRadius * (if (isActive || isConnecting) 0.038f else 0.018f) * (1f + layer * 0.20f)
+                        val dir = if (layer % 2 == 0) 1f else -1f
 
-                for (i in 0..steps) {
-                    val theta = (i.toFloat() / steps) * (2f * PI.toFloat())
-                    val harmonic = sin(lobeCount * theta + dir * wavePhase + layer * 0.9f) * amplitude +
-                        cos((lobeCount / 2) * theta - dir * wavePhase * 0.75f) * (amplitude * 0.48f)
-                    val r = baseR + harmonic
-                    val x = center.x + r * cos(theta)
-                    val y = center.y + r * sin(theta)
-                    if (i == 0) {
-                        wavePath.moveTo(x, y)
-                    } else {
-                        wavePath.lineTo(x, y)
+                        for (i in 0..steps) {
+                            val theta = (i.toFloat() / steps) * (2f * PI.toFloat())
+                            val harmonic = sin(lobeCount * theta + dir * wavePhase + layer * 0.9f) * amplitude +
+                                cos((lobeCount / 2) * theta - dir * wavePhase * 0.75f) * (amplitude * 0.48f)
+                            val r = baseR + harmonic
+                            val x = center.x + r * cos(theta)
+                            val y = center.y + r * sin(theta)
+                            if (i == 0) wavePath.moveTo(x, y) else wavePath.lineTo(x, y)
+                        }
+                        wavePath.close()
+
+                        drawPath(
+                            path = wavePath,
+                            color = color.copy(alpha = ringAlpha),
+                            style = Stroke(
+                                width = (2.8f - layer * 0.36f).coerceAtLeast(1.1f).dp.toPx(),
+                                cap = StrokeCap.Round,
+                            ),
+                        )
                     }
                 }
-                wavePath.close()
-
-                drawPath(
-                    path = wavePath,
-                    color = color.copy(alpha = ringAlpha),
-                    style = Stroke(
-                        width = (2.6f - layer * 0.42f).coerceAtLeast(1.1f).dp.toPx(),
-                        cap = StrokeCap.Round,
-                    ),
-                )
+                HeroWaveAnimationStyle.SONAR_PULSE -> {
+                    val ringCount = 5
+                    for (ring in 0 until ringCount) {
+                        val p = (rippleProgress + ring * 0.20f) % 1f
+                        val r = maxRadius * (0.26f + 0.72f * p)
+                        val alpha = (1f - p) * (if (isActive || isConnecting) 0.58f else 0.26f)
+                        drawCircle(
+                            color = color.copy(alpha = alpha),
+                            radius = r,
+                            center = center,
+                            style = Stroke(
+                                width = (2.6f * (1f - p * 0.5f)).dp.toPx(),
+                                pathEffect = if (ring % 2 == 1) {
+                                    PathEffect.dashPathEffect(floatArrayOf(18f, 12f), phase = wavePhase * 40f)
+                                } else null,
+                            ),
+                        )
+                    }
+                    // Radar sweep beam
+                    val sweepDeg = (wavePhase / (2f * PI.toFloat())) * 360f
+                    rotate(sweepDeg, pivot = center) {
+                        drawArc(
+                            brush = Brush.sweepGradient(
+                                0f to Color.Transparent,
+                                0.75f to color.copy(alpha = 0.02f),
+                                1f to color.copy(alpha = if (isActive || isConnecting) 0.35f else 0.16f),
+                                center = center,
+                            ),
+                            startAngle = 0f,
+                            sweepAngle = 95f,
+                            useCenter = true,
+                            topLeft = Offset(center.x - maxRadius * 0.90f, center.y - maxRadius * 0.90f),
+                            size = Size(maxRadius * 1.80f, maxRadius * 1.80f),
+                        )
+                    }
+                }
+                HeroWaveAnimationStyle.PLASMA_VORTEX -> {
+                    val arms = 4
+                    for (arm in 0 until arms) {
+                        val path = Path()
+                        val steps = 72
+                        val armAngleOffset = arm * (2f * PI.toFloat() / arms)
+                        for (s in 0..steps) {
+                            val t = s.toFloat() / steps
+                            val r = maxRadius * (0.28f + 0.68f * t)
+                            val theta = armAngleOffset + t * 3.6f - wavePhase * 1.4f
+                            val x = center.x + r * cos(theta)
+                            val y = center.y + r * sin(theta)
+                            if (s == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        }
+                        drawPath(
+                            path = path,
+                            color = color.copy(alpha = if (isActive || isConnecting) 0.46f else 0.22f),
+                            style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round),
+                        )
+                    }
+                }
+                HeroWaveAnimationStyle.STARFIELD_NOVA -> {
+                    val rayCount = 16
+                    for (ray in 0 until rayCount) {
+                        val angle = (ray.toFloat() / rayCount) * (2f * PI.toFloat()) + wavePhase * 0.35f
+                        val pulse = (sin(wavePhase * 2f + ray * 0.8f) + 1f) * 0.5f
+                        val innerR = maxRadius * 0.32f
+                        val outerR = maxRadius * (0.58f + 0.38f * pulse)
+                        drawLine(
+                            color = color.copy(alpha = (0.18f + 0.36f * pulse) * (if (isActive || isConnecting) 1f else 0.55f)),
+                            start = Offset(center.x + innerR * cos(angle), center.y + innerR * sin(angle)),
+                            end = Offset(center.x + outerR * cos(angle), center.y + outerR * sin(angle)),
+                            strokeWidth = 2.2.dp.toPx(),
+                            cap = StrokeCap.Round,
+                        )
+                    }
+                    for (ring in 0 until 3) {
+                        val p = (rippleProgress + ring * 0.33f) % 1f
+                        val r = maxRadius * (0.34f + 0.62f * p)
+                        drawCircle(
+                            color = color.copy(alpha = sin(p * PI.toFloat()) * 0.42f),
+                            radius = r,
+                            center = center,
+                            style = Stroke(width = 1.6.dp.toPx()),
+                        )
+                    }
+                }
+                HeroWaveAnimationStyle.CYBER_HEX_SHIELD -> {
+                    val hexLayers = 4
+                    for (layer in 0 until hexLayers) {
+                        val p = (rippleProgress + layer * 0.25f) % 1f
+                        val r = maxRadius * (0.34f + 0.62f * p)
+                        val hexPath = Path()
+                        val sides = 6
+                        val rot = wavePhase * (if (layer % 2 == 0) 0.4f else -0.4f)
+                        for (i in 0..sides) {
+                            val a = rot + i * (2f * PI.toFloat() / sides)
+                            val x = center.x + r * cos(a)
+                            val y = center.y + r * sin(a)
+                            if (i == 0) hexPath.moveTo(x, y) else hexPath.lineTo(x, y)
+                        }
+                        hexPath.close()
+                        drawPath(
+                            path = hexPath,
+                            color = color.copy(alpha = sin(p * PI.toFloat()) * (if (isActive || isConnecting) 0.55f else 0.25f)),
+                            style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round),
+                        )
+                    }
+                }
             }
 
-            // Inner subtle precision ring + rotating orbital satellites when active
-            val innerRingR = maxRadius * 0.42f * breathScale
+            // Inner subtle precision ring + rotating orbital satellites
+            val innerRingR = maxRadius * 0.36f * breathScale
             drawCircle(
-                color = color.copy(alpha = if (isActive || isConnecting) 0.32f else 0.14f),
+                color = color.copy(alpha = if (isActive || isConnecting) 0.34f else 0.16f),
                 radius = innerRingR,
                 center = center,
-                style = Stroke(width = 1.4.dp.toPx()),
+                style = Stroke(width = 1.5.dp.toPx()),
             )
 
-            if (isActive || isConnecting) {
-                for (orb in 0 until 3) {
-                    val orbAngle = wavePhase + (orb * 2f * PI.toFloat() / 3f)
-                    val orbRadius = maxRadius * (0.58f + orb * 0.12f)
-                    val ox = center.x + orbRadius * cos(orbAngle)
-                    val oy = center.y + orbRadius * sin(orbAngle)
-                    drawCircle(
-                        color = color.copy(alpha = 0.65f),
-                        radius = 3.2.dp.toPx(),
-                        center = Offset(ox, oy),
-                    )
-                }
+            for (orb in 0 until 4) {
+                val orbAngle = wavePhase * (if (orb % 2 == 0) 1f else -0.8f) + (orb * 2f * PI.toFloat() / 4f)
+                val orbRadius = maxRadius * (0.48f + orb * 0.13f)
+                val ox = center.x + orbRadius * cos(orbAngle)
+                val oy = center.y + orbRadius * sin(orbAngle)
+                drawCircle(
+                    color = color.copy(alpha = if (isActive || isConnecting) 0.72f else 0.32f),
+                    radius = 3.5.dp.toPx(),
+                    center = Offset(ox, oy),
+                )
             }
 
             if (isConnecting) {
@@ -696,16 +854,16 @@ fun NeumorphicRadarPulse(
                     drawArc(
                         brush = Brush.sweepGradient(
                             0f to Color.Transparent,
-                            0.60f to color.copy(alpha = 0.06f),
-                            1f to color.copy(alpha = 0.52f),
+                            0.60f to color.copy(alpha = 0.08f),
+                            1f to color.copy(alpha = 0.58f),
                             center = center,
                         ),
                         startAngle = 0f,
-                        sweepAngle = 120f,
+                        sweepAngle = 135f,
                         useCenter = false,
-                        topLeft = Offset(center.x - maxRadius * 0.76f, center.y - maxRadius * 0.76f),
-                        size = Size(maxRadius * 1.52f, maxRadius * 1.52f),
-                        style = Stroke(width = 3.2.dp.toPx(), cap = StrokeCap.Round),
+                        topLeft = Offset(center.x - maxRadius * 0.78f, center.y - maxRadius * 0.78f),
+                        size = Size(maxRadius * 1.56f, maxRadius * 1.56f),
+                        style = Stroke(width = 3.4.dp.toPx(), cap = StrokeCap.Round),
                     )
                 }
             }
@@ -716,8 +874,7 @@ fun NeumorphicRadarPulse(
 
 /**
  * 6. 3D Interactive World Globe & Cyber Projection Background
- * Renders a 3D spherical globe + continental dot projection whose 3D camera pitch/tilt
- * and longitude rotation respond in real-time as the user scrolls the screen.
+ * Renders a large, screen-spanning 3D spherical globe centered behind the hero area.
  */
 private val WORLD_MAP_BITMAP: List<String> = listOf(
     "................................................",
@@ -767,7 +924,7 @@ fun AnimatedWorldMapBackground(
         initialValue = 0f,
         targetValue = (2.0 * PI).toFloat(),
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = if (isConnecting) 16000 else 32000, easing = LinearEasing),
+            animation = tween(durationMillis = if (isConnecting) 16000 else 30000, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "globe-auto-rot",
@@ -776,13 +933,13 @@ fun AnimatedWorldMapBackground(
         initialValue = -0.25f,
         targetValue = 1.25f,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = if (isConnecting) 3000 else 5800, easing = LinearEasing),
+            animation = tween(durationMillis = if (isConnecting) 2800 else 5200, easing = LinearEasing),
             repeatMode = RepeatMode.Restart,
         ),
         label = "globe-scan-wave",
     )
     val nodePulse by infinite.animateFloat(
-        initialValue = 0.4f,
+        initialValue = 0.45f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
             animation = tween(durationMillis = 1400, easing = FastOutSlowInEasing),
@@ -796,24 +953,24 @@ fun AnimatedWorldMapBackground(
         val h = size.height
         if (w <= 16f || h <= 16f || !w.isFinite() || !h.isFinite()) return@Canvas
 
-        // Scroll-driven 3D camera angles:
-        // Scrolling changes both the 3D pitch (tiltAngle) and yaw (longitude rotation)
+        // Scroll-driven 3D camera angles
         val safeScrollPx = if (scrollOffsetPx.isFinite()) scrollOffsetPx else 0f
         val scrollNormalized = (safeScrollPx / 900f)
-        val tiltAngle = (0.32f + scrollNormalized * 0.65f).coerceIn(-0.65f, 0.85f)
+        val tiltAngle = (0.30f + scrollNormalized * 0.65f).coerceIn(-0.65f, 0.85f)
         val cosTilt = cos(tiltAngle)
         val sinTilt = sin(tiltAngle)
         val yawAngle = autoRotation + scrollNormalized * 1.35f
 
-        val minGlobeR = minOf(145.dp.toPx(), minOf(w, h) * 0.45f).coerceAtLeast(16f)
-        val maxGlobeR = maxOf(260.dp.toPx(), minGlobeR + 1f)
-        val globeRadius = (minOf(w, h) * 0.44f).coerceIn(minGlobeR, maxGlobeR)
+        // Enlarged 3D Globe spanning the screen width prominently and centered in the hero viewport
+        val minGlobeR = minOf(185.dp.toPx(), minOf(w, h) * 0.52f).coerceAtLeast(24f)
+        val maxGlobeR = maxOf(340.dp.toPx(), minGlobeR + 1f)
+        val globeRadius = (w * 0.49f).coerceIn(minGlobeR, maxGlobeR)
 
-        val minCenterY = minOf(130.dp.toPx(), h * 0.35f).coerceAtLeast(8f)
-        val maxCenterY = maxOf(h * 0.45f, minCenterY + 1f)
+        val minCenterY = minOf(170.dp.toPx(), h * 0.28f).coerceAtLeast(16f)
+        val maxCenterY = maxOf(h * 0.48f, minCenterY + 1f)
         val globeCenter = Offset(
             x = w * 0.5f,
-            y = (210.dp.toPx() - safeScrollPx * 0.08f).coerceIn(minCenterY, maxCenterY),
+            y = (h * 0.34f - safeScrollPx * 0.07f).coerceIn(minCenterY, maxCenterY),
         )
 
         // Helper to project 3D spherical coordinates (lon, lat) onto 2D screen with depth z (-1..1)
@@ -823,7 +980,6 @@ fun AnimatedWorldMapBackground(
             val y3 = sin(lat)
             val z3 = cos(lat) * cos(relLon)
 
-            // Apply 3D camera pitch (rotation around X-axis)
             val yRot = y3 * cosTilt - z3 * sinTilt
             val zRot = y3 * sinTilt + z3 * cosTilt
 
@@ -834,31 +990,31 @@ fun AnimatedWorldMapBackground(
         }
 
         // 1. Ambient 3D Planetary Aura Glow
-        val auraAlpha = if (isConnected) 0.16f else if (isConnecting) 0.14f else 0.07f
+        val auraAlpha = if (isConnected) 0.20f else if (isConnecting) 0.17f else 0.09f
         drawCircle(
             brush = Brush.radialGradient(
                 colors = listOf(
                     accentColor.copy(alpha = auraAlpha),
-                    accentColor.copy(alpha = auraAlpha * 0.35f),
+                    accentColor.copy(alpha = auraAlpha * 0.38f),
                     Color.Transparent,
                 ),
                 center = globeCenter,
-                radius = globeRadius * 1.28f,
+                radius = globeRadius * 1.32f,
             ),
-            radius = globeRadius * 1.28f,
+            radius = globeRadius * 1.32f,
             center = globeCenter,
         )
 
         // Outer 3D Sphere Rim
         drawCircle(
-            color = accentColor.copy(alpha = if (isDark) 0.16f else 0.14f),
+            color = accentColor.copy(alpha = if (isDark) 0.20f else 0.17f),
             radius = globeRadius,
             center = globeCenter,
-            style = Stroke(width = 1.2.dp.toPx()),
+            style = Stroke(width = 1.4.dp.toPx()),
         )
 
-        // 2. 3D Latitude & Longitude Wireframe Meridians (rotates and tilts with scroll)
-        val wireAlpha = if (isDark) 0.075f else 0.085f
+        // 2. 3D Latitude & Longitude Wireframe Meridians
+        val wireAlpha = if (isDark) 0.10f else 0.11f
         for (latIdx in -2..2) {
             val lat = latIdx * (PI.toFloat() / 6f)
             val path = Path()
@@ -881,7 +1037,7 @@ fun AnimatedWorldMapBackground(
             drawPath(
                 path = path,
                 color = accentColor.copy(alpha = wireAlpha),
-                style = Stroke(width = 0.85.dp.toPx()),
+                style = Stroke(width = 0.95.dp.toPx()),
             )
         }
 

@@ -127,6 +127,7 @@ class MainActivity : ComponentActivity() {
                 themeMode = themeController.mode,
                 appLanguage = languageController.language,
                 colorTheme = themeController.colorTheme,
+                uiDesignStyle = themeController.uiDesignStyle,
             ) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     val navController = rememberNavController()

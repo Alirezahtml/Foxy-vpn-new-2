@@ -99,6 +99,8 @@ import androidx.compose.foundation.shape.CircleShape
 import com.vauth.foxyvpn.data.DynamicIslandLedStyle
 import com.vauth.foxyvpn.data.DynamicIslandMotionStyle
 import com.vauth.foxyvpn.data.FoxyColorTheme
+import com.vauth.foxyvpn.data.FoxyUiDesignStyle
+import com.vauth.foxyvpn.data.HeroWaveAnimationStyle
 import com.vauth.foxyvpn.ui.theme.formatClockTimeLocalized
 import com.vauth.foxyvpn.ui.theme.formatMinutesLocalized
 import kotlinx.coroutines.Dispatchers
@@ -168,6 +170,7 @@ fun SettingsScreen(
     var dynamicIslandShowSessionData by remember { mutableStateOf(settingsStore.dynamicIslandShowSessionData) }
     var dynamicIslandShowIpBadge by remember { mutableStateOf(settingsStore.dynamicIslandShowIpBadge) }
     var dynamicIslandDraggable by remember { mutableStateOf(settingsStore.dynamicIslandDraggable) }
+    var dynamicIslandShowQuickApps by remember { mutableStateOf(settingsStore.dynamicIslandShowQuickApps) }
 
     // Speed Booster, Smart Battery Saver & Automation State
     var unmeteredVpnModeEnabled by remember { mutableStateOf(settingsStore.unmeteredVpnModeEnabled) }
@@ -228,6 +231,7 @@ fun SettingsScreen(
                 dynamicIslandShowSessionData = settingsStore.dynamicIslandShowSessionData
                 dynamicIslandShowIpBadge = settingsStore.dynamicIslandShowIpBadge
                 dynamicIslandDraggable = settingsStore.dynamicIslandDraggable
+                dynamicIslandShowQuickApps = settingsStore.dynamicIslandShowQuickApps
                 showIslandStudioModal = false
             },
         )
@@ -676,6 +680,127 @@ fun SettingsScreen(
                                     }
                                 }
                             }
+
+                            HorizontalDivider(
+                                color = neu.textSecondary.copy(alpha = 0.12f),
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+
+                            // UI Design Architecture Style (Claymorphism, Dark Luxury, Neo-Brutalism, Bento UI, Editorial Design, Neumorphism)
+                            Text(
+                                text = s.uiDesignStyleTitle,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontFamily = fonts.headingFont,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = neu.textPrimary,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = s.uiDesignStyleSub,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = fonts.bodyFont),
+                                color = neu.textSecondary,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                FoxyUiDesignStyle.entries.forEach { designPreset ->
+                                    val selected = themeController.uiDesignStyle == designPreset
+                                    Box(
+                                        modifier = Modifier
+                                            .neumorphicTouchBounce()
+                                            .clip(RoundedCornerShape(14.dp))
+                                            .background(
+                                                if (selected) neu.accent
+                                                else neu.surfaceElevated,
+                                            )
+                                            .border(
+                                                width = if (selected) 1.8.dp else 1.dp,
+                                                color = if (selected) neu.accent else neu.textSecondary.copy(alpha = 0.18f),
+                                                shape = RoundedCornerShape(14.dp),
+                                            )
+                                            .clickable { themeController.applyUiDesignStyle(designPreset) }
+                                            .padding(horizontal = 13.dp, vertical = 10.dp),
+                                    ) {
+                                        Column {
+                                            Text(
+                                                text = designPreset.localizedLabel(s.language),
+                                                style = MaterialTheme.typography.labelMedium.copy(
+                                                    fontFamily = fonts.headingFont,
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                ),
+                                                color = if (selected) Color.White else neu.textPrimary,
+                                                maxLines = 1,
+                                            )
+                                            Spacer(Modifier.height(2.dp))
+                                            Text(
+                                                text = designPreset.localizedSubtitle(s.language),
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    fontFamily = fonts.bodyFont,
+                                                    fontSize = 10.sp,
+                                                ),
+                                                color = if (selected) Color.White.copy(alpha = 0.85f) else neu.textSecondary,
+                                                maxLines = 1,
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            HorizontalDivider(
+                                color = neu.textSecondary.copy(alpha = 0.12f),
+                                modifier = Modifier.padding(vertical = 16.dp),
+                            )
+
+                            // Hero Connection Wave Animation Style (5 Styles)
+                            Text(
+                                text = s.heroWaveStyleTitle,
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontFamily = fonts.headingFont,
+                                    fontWeight = FontWeight.SemiBold,
+                                ),
+                                color = neu.textPrimary,
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = s.heroWaveStyleSub,
+                                style = MaterialTheme.typography.bodySmall.copy(fontFamily = fonts.bodyFont),
+                                color = neu.textSecondary,
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                HeroWaveAnimationStyle.entries.forEach { wavePreset ->
+                                    val selected = themeController.heroWaveStyle == wavePreset
+                                    Box(
+                                        modifier = Modifier
+                                            .neumorphicTouchBounce()
+                                            .clip(RoundedCornerShape(12.dp))
+                                            .background(
+                                                if (selected) neu.accent
+                                                else neu.accent.copy(alpha = 0.12f),
+                                            )
+                                            .clickable { themeController.applyHeroWaveStyle(wavePreset) }
+                                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    ) {
+                                        Text(
+                                            text = wavePreset.localizedLabel(s.language),
+                                            style = MaterialTheme.typography.labelMedium.copy(
+                                                fontFamily = fonts.headingFont,
+                                                fontWeight = FontWeight.Bold,
+                                            ),
+                                            color = if (selected) Color.White else neu.textPrimary,
+                                            maxLines = 1,
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
 
@@ -842,7 +967,17 @@ fun SettingsScreen(
 
                                 HorizontalDivider(color = neu.textSecondary.copy(alpha = 0.12f), modifier = Modifier.padding(vertical = 12.dp))
 
-                                // Pinned Quick-Launch Apps inside Dynamic Island
+                                // Quick-Launch Apps Toggle + App Picker inside Dynamic Island
+                                SettingToggleRow(
+                                    title = s.islandShowQuickAppsTitle,
+                                    subtitle = s.islandShowQuickAppsSub,
+                                    checked = dynamicIslandShowQuickApps,
+                                    onCheckedChange = {
+                                        dynamicIslandShowQuickApps = it
+                                        settingsStore.dynamicIslandShowQuickApps = it
+                                    },
+                                )
+                                Spacer(Modifier.height(10.dp))
                                 SettingClickableRow(
                                     title = s.islandPinnedAppsTitle,
                                     value = if (dynamicIslandPinnedApps.isEmpty()) s.islandNoPinnedApps

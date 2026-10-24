@@ -23,6 +23,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.view.WindowCompat
 import com.vauth.foxyvpn.data.FoxyColorTheme
+import com.vauth.foxyvpn.data.FoxyUiDesignStyle
 
 private val LightColors = lightColorScheme(
     primary = md_theme_light_primary,
@@ -107,22 +108,27 @@ fun FoxyVpnTheme(
     themeMode: ThemeMode = ThemeMode.SYSTEM,
     appLanguage: AppLanguage = AppLanguage.EN,
     colorTheme: FoxyColorTheme = FoxyColorTheme.CYBER_FOX,
+    uiDesignStyle: FoxyUiDesignStyle = FoxyUiDesignStyle.CLAYMORPHISM,
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit,
 ) {
     val systemInDarkTheme = isSystemInDarkTheme()
-    val darkTheme = when (themeMode) {
-        ThemeMode.SYSTEM -> systemInDarkTheme
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
+    val darkTheme = when {
+        uiDesignStyle == FoxyUiDesignStyle.DARK_LUXURY -> true
+        themeMode == ThemeMode.SYSTEM -> systemInDarkTheme
+        themeMode == ThemeMode.LIGHT -> false
+        else -> true
     }
     val context = LocalContext.current
     val statusColors = statusColorsForTheme(darkTheme, colorTheme)
-    val targetPrimary = Color(if (darkTheme) colorTheme.primaryDarkHex else colorTheme.primaryLightHex)
+    val rawPrimary = when {
+        uiDesignStyle == FoxyUiDesignStyle.DARK_LUXURY && colorTheme == FoxyColorTheme.CYBER_FOX -> Color(0xFFE5B84B)
+        else -> Color(if (darkTheme) colorTheme.primaryDarkHex else colorTheme.primaryLightHex)
+    }
     val targetSecondary = Color(colorTheme.secondaryAccentHex)
 
     val animatedPrimary by animateColorAsState(
-        targetValue = targetPrimary,
+        targetValue = rawPrimary,
         animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "themePrimary",
     )
@@ -133,9 +139,9 @@ fun FoxyVpnTheme(
     )
     val animatedContainer by animateColorAsState(
         targetValue = if (darkTheme) {
-            targetPrimary.copy(alpha = 0.24f)
+            rawPrimary.copy(alpha = 0.24f)
         } else {
-            targetPrimary.copy(alpha = 0.16f)
+            rawPrimary.copy(alpha = 0.16f)
         },
         animationSpec = spring(stiffness = Spring.StiffnessLow),
         label = "themeContainer",
@@ -158,30 +164,154 @@ fun FoxyVpnTheme(
         surfaceTint = animatedPrimary,
     )
 
-    val neuColors = if (darkTheme) {
-        NeumorphicColors(
-            background = NeuDarkBg,
-            surface = NeuDarkSurface,
-            surfaceElevated = NeuDarkSurfaceElevated,
-            shadowLight = NeuDarkShadowLight,
-            shadowDark = NeuDarkShadowDark,
+    val neuColors = when (uiDesignStyle) {
+        FoxyUiDesignStyle.DARK_LUXURY -> NeumorphicColors(
+            background = Color(0xFF07080C),
+            surface = Color(0xFF10131C),
+            surfaceElevated = Color(0xFF171B27),
+            shadowLight = Color(0xFFE5B84B),
+            shadowDark = Color(0xFF020305),
             accent = animatedPrimary,
-            textPrimary = md_theme_dark_onBackground,
-            textSecondary = md_theme_dark_onSurfaceVariant,
+            textPrimary = Color(0xFFF9F6EE),
+            textSecondary = Color(0xFFB8B2A1),
             isDark = true,
+            designStyle = uiDesignStyle,
         )
-    } else {
-        NeumorphicColors(
-            background = NeuLightBg,
-            surface = NeuLightSurface,
-            surfaceElevated = NeuLightSurfaceElevated,
-            shadowLight = NeuLightShadowLight,
-            shadowDark = NeuLightShadowDark,
-            accent = animatedPrimary,
-            textPrimary = md_theme_light_onBackground,
-            textSecondary = md_theme_light_onSurfaceVariant,
-            isDark = false,
-        )
+        FoxyUiDesignStyle.NEO_BRUTALISM -> if (darkTheme) {
+            NeumorphicColors(
+                background = Color(0xFF0F1219),
+                surface = Color(0xFF181D29),
+                surfaceElevated = Color(0xFF212838),
+                shadowLight = Color(0xFFE2E8F0),
+                shadowDark = Color(0xFF050608),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFFF8FAFC),
+                textSecondary = Color(0xFFCBD5E1),
+                isDark = true,
+                designStyle = uiDesignStyle,
+            )
+        } else {
+            NeumorphicColors(
+                background = Color(0xFFF8F6F0),
+                surface = Color(0xFFFFFFFF),
+                surfaceElevated = Color(0xFFF0EDE4),
+                shadowLight = Color(0xFF0F172A),
+                shadowDark = Color(0xFF0F172A),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFF0F172A),
+                textSecondary = Color(0xFF334155),
+                isDark = false,
+                designStyle = uiDesignStyle,
+            )
+        }
+        FoxyUiDesignStyle.BENTO_UI -> if (darkTheme) {
+            NeumorphicColors(
+                background = Color(0xFF090C12),
+                surface = Color(0xFF131823),
+                surfaceElevated = Color(0xFF1B2230),
+                shadowLight = Color(0xFF2A3447),
+                shadowDark = Color(0xFF040609),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFFF8FAFC),
+                textSecondary = Color(0xFF94A3B8),
+                isDark = true,
+                designStyle = uiDesignStyle,
+            )
+        } else {
+            NeumorphicColors(
+                background = Color(0xFFF1F4F9),
+                surface = Color(0xFFFFFFFF),
+                surfaceElevated = Color(0xFFF7F9FC),
+                shadowLight = Color(0xFFFFFFFF),
+                shadowDark = Color(0xFFCBD5E1),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFF0F172A),
+                textSecondary = Color(0xFF475569),
+                isDark = false,
+                designStyle = uiDesignStyle,
+            )
+        }
+        FoxyUiDesignStyle.EDITORIAL_DESIGN -> if (darkTheme) {
+            NeumorphicColors(
+                background = Color(0xFF0E1013),
+                surface = Color(0xFF16191E),
+                surfaceElevated = Color(0xFF1F232A),
+                shadowLight = Color(0xFF2E3440),
+                shadowDark = Color(0xFF060709),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFFF5F3EE),
+                textSecondary = Color(0xFFA8A39A),
+                isDark = true,
+                designStyle = uiDesignStyle,
+            )
+        } else {
+            NeumorphicColors(
+                background = Color(0xFFF5F2E9),
+                surface = Color(0xFFFCFBF7),
+                surfaceElevated = Color(0xFFEDE9DD),
+                shadowLight = Color(0xFFFFFFFF),
+                shadowDark = Color(0xFFD6D0C2),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFF18181B),
+                textSecondary = Color(0xFF52525B),
+                isDark = false,
+                designStyle = uiDesignStyle,
+            )
+        }
+        FoxyUiDesignStyle.CLAYMORPHISM -> if (darkTheme) {
+            NeumorphicColors(
+                background = Color(0xFF111622),
+                surface = Color(0xFF1B2335),
+                surfaceElevated = Color(0xFF232D44),
+                shadowLight = Color(0xFF3E4F75),
+                shadowDark = Color(0xFF070A10),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFFF8FAFC),
+                textSecondary = Color(0xFF94A3B8),
+                isDark = true,
+                designStyle = uiDesignStyle,
+            )
+        } else {
+            NeumorphicColors(
+                background = Color(0xFFEAF0F8),
+                surface = Color(0xFFF6F9FE),
+                surfaceElevated = Color(0xFFE2EBF6),
+                shadowLight = Color(0xFFFFFFFF),
+                shadowDark = Color(0xFFBCCAE0),
+                accent = animatedPrimary,
+                textPrimary = Color(0xFF0F172A),
+                textSecondary = Color(0xFF475569),
+                isDark = false,
+                designStyle = uiDesignStyle,
+            )
+        }
+        FoxyUiDesignStyle.NEUMORPHISM -> if (darkTheme) {
+            NeumorphicColors(
+                background = NeuDarkBg,
+                surface = NeuDarkSurface,
+                surfaceElevated = NeuDarkSurfaceElevated,
+                shadowLight = NeuDarkShadowLight,
+                shadowDark = NeuDarkShadowDark,
+                accent = animatedPrimary,
+                textPrimary = md_theme_dark_onBackground,
+                textSecondary = md_theme_dark_onSurfaceVariant,
+                isDark = true,
+                designStyle = uiDesignStyle,
+            )
+        } else {
+            NeumorphicColors(
+                background = NeuLightBg,
+                surface = NeuLightSurface,
+                surfaceElevated = NeuLightSurfaceElevated,
+                shadowLight = NeuLightShadowLight,
+                shadowDark = NeuLightShadowDark,
+                accent = animatedPrimary,
+                textPrimary = md_theme_light_onBackground,
+                textSecondary = md_theme_light_onSurfaceVariant,
+                isDark = false,
+                designStyle = uiDesignStyle,
+            )
+        }
     }
 
     val view = LocalView.current

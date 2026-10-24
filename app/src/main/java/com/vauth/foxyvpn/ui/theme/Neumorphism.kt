@@ -86,6 +86,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.vauth.foxyvpn.data.FoxyUiDesignStyle
 import com.vauth.foxyvpn.data.model.ConnectionState
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
@@ -100,6 +101,7 @@ data class NeumorphicColors(
     val textPrimary: Color,
     val textSecondary: Color,
     val isDark: Boolean,
+    val designStyle: FoxyUiDesignStyle = FoxyUiDesignStyle.CLAYMORPHISM,
 )
 
 val LocalNeumorphicColors = staticCompositionLocalOf {
@@ -113,6 +115,7 @@ val LocalNeumorphicColors = staticCompositionLocalOf {
         textPrimary = md_theme_light_onBackground,
         textSecondary = md_theme_light_onSurfaceVariant,
         isDark = false,
+        designStyle = FoxyUiDesignStyle.CLAYMORPHISM,
     )
 }
 
@@ -122,7 +125,7 @@ val currentNeumorphicColors: NeumorphicColors
     get() = LocalNeumorphicColors.current
 
 /**
- * Renders a dual-shadow raised Soft Neumorphic effect.
+ * Renders style-adaptive outer shadow / bevel effects for all 6 UI Design Styles.
  */
 fun Modifier.neumorphicRaised(
     shape: Shape = RoundedCornerShape(16.dp),
@@ -131,51 +134,185 @@ fun Modifier.neumorphicRaised(
     isPressed: Boolean = false,
     lightShadowColor: Color? = null,
     darkShadowColor: Color? = null,
+    designStyle: FoxyUiDesignStyle = FoxyUiDesignStyle.NEUMORPHISM,
+    isDark: Boolean = false,
+    accentColor: Color = Color(0xFFFF6D00),
 ): Modifier = this.then(
     Modifier.drawBehind {
         if (size.width <= 2f || size.height <= 2f || !size.width.isFinite() || !size.height.isFinite()) return@drawBehind
-        val lightColor = lightShadowColor ?: if (drawContext.size.width > 0) Color.White.copy(alpha = 0.9f) else Color.White
-        val darkColor = darkShadowColor ?: Color.Black.copy(alpha = 0.15f)
-
-        val currentElev = if (isPressed) (elevation * 0.25f) else elevation
-        val blurPx = currentElev.toPx()
-        val offsetPx = (currentElev * 0.85f).toPx()
         val radiusPx = cornerRadius.toPx().coerceAtLeast(0f)
 
-        drawIntoCanvas { canvas ->
-            if (blurPx > 0.5f && blurPx.isFinite()) {
-                // Top-left light highlight
-                val paintLight = Paint().asFrameworkPaint().apply {
-                    color = lightColor.toArgb()
-                    isAntiAlias = true
-                    maskFilter = BlurMaskFilter(blurPx.coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
-                }
-                canvas.nativeCanvas.drawRoundRect(
-                    -offsetPx,
-                    -offsetPx,
-                    size.width - offsetPx,
-                    size.height - offsetPx,
-                    radiusPx,
-                    radiusPx,
-                    paintLight,
-                )
-
-                // Bottom-right dark shadow
-                val paintDark = Paint().asFrameworkPaint().apply {
-                    color = darkColor.toArgb()
-                    isAntiAlias = true
-                    maskFilter = BlurMaskFilter(blurPx.coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
-                }
-                canvas.nativeCanvas.drawRoundRect(
-                    offsetPx,
-                    offsetPx,
-                    size.width + offsetPx,
-                    size.height + offsetPx,
-                    radiusPx,
-                    radiusPx,
-                    paintDark,
+        when (designStyle) {
+            FoxyUiDesignStyle.NEO_BRUTALISM -> {
+                // Hard offset zero-blur brutalist shadow
+                val hardOffset = (if (isPressed) 1.5.dp else 4.2.dp).toPx()
+                val shadowColor = if (isDark) accentColor.copy(alpha = 0.85f) else Color(0xFF111111)
+                drawRoundRect(
+                    color = shadowColor,
+                    topLeft = Offset(hardOffset, hardOffset),
+                    size = size,
+                    cornerRadius = CornerRadius(radiusPx, radiusPx),
                 )
             }
+            FoxyUiDesignStyle.BENTO_UI -> {
+                val dropOffset = (if (isPressed) 1.dp else 3.dp).toPx()
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = if (isDark) 0.32f else 0.07f),
+                    topLeft = Offset(0f, dropOffset),
+                    size = size,
+                    cornerRadius = CornerRadius(radiusPx, radiusPx),
+                )
+            }
+            FoxyUiDesignStyle.EDITORIAL_DESIGN -> {
+                val dropOffset = (if (isPressed) 1.dp else 2.5.dp).toPx()
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = if (isDark) 0.28f else 0.06f),
+                    topLeft = Offset(dropOffset * 0.5f, dropOffset),
+                    size = size,
+                    cornerRadius = CornerRadius(radiusPx, radiusPx),
+                )
+            }
+            FoxyUiDesignStyle.DARK_LUXURY -> {
+                val glowRadius = (if (isPressed) 2.dp else 5.dp).toPx()
+                drawRoundRect(
+                    color = Color.Black.copy(alpha = if (isDark) 0.55f else 0.14f),
+                    topLeft = Offset(0f, glowRadius * 0.65f),
+                    size = size,
+                    cornerRadius = CornerRadius(radiusPx, radiusPx),
+                )
+            }
+            FoxyUiDesignStyle.CLAYMORPHISM,
+            FoxyUiDesignStyle.NEUMORPHISM -> {
+                val lightColor = lightShadowColor ?: if (drawContext.size.width > 0) Color.White.copy(alpha = 0.9f) else Color.White
+                val darkColor = darkShadowColor ?: Color.Black.copy(alpha = 0.15f)
+
+                val currentElev = if (isPressed) (elevation * 0.25f) else elevation
+                val blurPx = currentElev.toPx()
+                val offsetPx = (currentElev * 0.85f).toPx()
+
+                drawIntoCanvas { canvas ->
+                    if (blurPx > 0.5f && blurPx.isFinite()) {
+                        val paintLight = Paint().asFrameworkPaint().apply {
+                            color = lightColor.toArgb()
+                            isAntiAlias = true
+                            maskFilter = BlurMaskFilter(blurPx.coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawRoundRect(
+                            -offsetPx,
+                            -offsetPx,
+                            size.width - offsetPx,
+                            size.height - offsetPx,
+                            radiusPx,
+                            radiusPx,
+                            paintLight,
+                        )
+
+                        val paintDark = Paint().asFrameworkPaint().apply {
+                            color = darkColor.toArgb()
+                            isAntiAlias = true
+                            maskFilter = BlurMaskFilter(blurPx.coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
+                        }
+                        canvas.nativeCanvas.drawRoundRect(
+                            offsetPx,
+                            offsetPx,
+                            size.width + offsetPx,
+                            size.height + offsetPx,
+                            radiusPx,
+                            radiusPx,
+                            paintDark,
+                        )
+                    }
+                }
+            }
+        }
+    }
+)
+
+/**
+ * Renders inner clay 3D inflation bevel or luxury/editorial inner accents.
+ */
+fun Modifier.styleInnerTreatment(
+    designStyle: FoxyUiDesignStyle,
+    cornerRadius: Dp,
+    isDark: Boolean,
+    accentColor: Color,
+): Modifier = this.then(
+    Modifier.drawBehind {
+        val w = size.width
+        val h = size.height
+        if (w <= 4f || h <= 4f || !w.isFinite() || !h.isFinite()) return@drawBehind
+        val r = cornerRadius.toPx().coerceAtLeast(0f)
+
+        when (designStyle) {
+            FoxyUiDesignStyle.CLAYMORPHISM -> {
+                // Glossy inflated 3D inner top-left highlight + bottom-right clay depth
+                val bevel = 4.5.dp.toPx().coerceAtMost(minOf(w, h) * 0.25f)
+                drawRoundRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (isDark) 0.16f else 0.72f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = if (isDark) 0.34f else 0.09f),
+                        ),
+                        start = Offset(0f, 0f),
+                        end = Offset(w, h),
+                    ),
+                    size = size,
+                    cornerRadius = CornerRadius(r, r),
+                )
+                drawRoundRect(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (isDark) 0.08f else 0.38f),
+                            Color.Transparent,
+                        ),
+                        center = Offset(w * 0.28f, h * 0.22f),
+                        radius = maxOf(w, h) * 0.65f,
+                    ),
+                    topLeft = Offset(bevel * 0.3f, bevel * 0.3f),
+                    size = Size((w - bevel * 0.6f).coerceAtLeast(1f), (h - bevel * 0.6f).coerceAtLeast(1f)),
+                    cornerRadius = CornerRadius(r, r),
+                )
+            }
+            FoxyUiDesignStyle.DARK_LUXURY -> {
+                // Subtle champagne gold / luxury top sheen
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            accentColor.copy(alpha = if (isDark) 0.12f else 0.07f),
+                            Color.Transparent,
+                            Color.Black.copy(alpha = if (isDark) 0.25f else 0.03f),
+                        ),
+                    ),
+                    size = size,
+                    cornerRadius = CornerRadius(r, r),
+                )
+            }
+            FoxyUiDesignStyle.BENTO_UI -> {
+                // Crisp Bento glass top highlight
+                drawRoundRect(
+                    brush = Brush.verticalGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = if (isDark) 0.06f else 0.55f),
+                            Color.Transparent,
+                        ),
+                        startY = 0f,
+                        endY = h * 0.45f,
+                    ),
+                    size = size,
+                    cornerRadius = CornerRadius(r, r),
+                )
+            }
+            FoxyUiDesignStyle.EDITORIAL_DESIGN -> {
+                // Architectural top rule accent line
+                val lineH = 2.dp.toPx()
+                drawRect(
+                    color = accentColor.copy(alpha = if (isDark) 0.42f else 0.32f),
+                    topLeft = Offset(r * 0.6f, 0f),
+                    size = Size((w - r * 1.2f).coerceAtLeast(1f), lineH),
+                )
+            }
+            else -> Unit
         }
     }
 )
@@ -242,8 +379,18 @@ fun NeumorphicCard(
     content: @Composable () -> Unit,
 ) {
     val neu = currentNeumorphicColors
+    val style = neu.designStyle
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
+
+    val effectiveCorner = when (style) {
+        FoxyUiDesignStyle.CLAYMORPHISM -> cornerRadius * 1.15f
+        FoxyUiDesignStyle.NEO_BRUTALISM -> (cornerRadius * 0.65f).coerceAtLeast(10.dp)
+        FoxyUiDesignStyle.BENTO_UI -> (cornerRadius * 1.15f).coerceAtLeast(22.dp)
+        FoxyUiDesignStyle.EDITORIAL_DESIGN -> (cornerRadius * 0.45f).coerceAtLeast(8.dp)
+        FoxyUiDesignStyle.DARK_LUXURY -> cornerRadius
+        FoxyUiDesignStyle.NEUMORPHISM -> cornerRadius
+    }
 
     val animatedElevation by animateDpAsState(
         targetValue = if (isPressed) elevation * 0.35f else elevation,
@@ -251,23 +398,50 @@ fun NeumorphicCard(
         label = "neu-card-elevation",
     )
 
-    val shape = RoundedCornerShape(cornerRadius)
+    val shape = RoundedCornerShape(effectiveCorner)
+
+    val borderWidth = when (style) {
+        FoxyUiDesignStyle.NEO_BRUTALISM -> 2.2.dp
+        FoxyUiDesignStyle.CLAYMORPHISM -> 1.5.dp
+        FoxyUiDesignStyle.DARK_LUXURY -> 1.2.dp
+        FoxyUiDesignStyle.BENTO_UI -> 1.2.dp
+        FoxyUiDesignStyle.EDITORIAL_DESIGN -> 1.dp
+        FoxyUiDesignStyle.NEUMORPHISM -> 1.dp
+    }
+
+    val borderColor = when (style) {
+        FoxyUiDesignStyle.NEO_BRUTALISM -> if (neu.isDark) neu.accent.copy(alpha = 0.9f) else Color(0xFF111111)
+        FoxyUiDesignStyle.DARK_LUXURY -> neu.accent.copy(alpha = if (neu.isDark) 0.38f else 0.28f)
+        FoxyUiDesignStyle.CLAYMORPHISM -> if (neu.isDark) Color.White.copy(alpha = 0.14f) else Color.White.copy(alpha = 0.85f)
+        FoxyUiDesignStyle.BENTO_UI -> if (neu.isDark) Color.White.copy(alpha = 0.10f) else Color.Black.copy(alpha = 0.08f)
+        FoxyUiDesignStyle.EDITORIAL_DESIGN -> if (neu.isDark) Color.White.copy(alpha = 0.14f) else Color.Black.copy(alpha = 0.14f)
+        FoxyUiDesignStyle.NEUMORPHISM -> if (neu.isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.6f)
+    }
 
     Box(
         modifier = modifier
             .neumorphicRaised(
                 shape = shape,
-                cornerRadius = cornerRadius,
+                cornerRadius = effectiveCorner,
                 elevation = animatedElevation,
                 isPressed = isPressed,
                 lightShadowColor = neu.shadowLight.copy(alpha = if (neu.isDark) 0.3f else 0.85f),
                 darkShadowColor = neu.shadowDark.copy(alpha = if (neu.isDark) 0.7f else 0.45f),
+                designStyle = style,
+                isDark = neu.isDark,
+                accentColor = neu.accent,
             )
             .clip(shape)
             .background(neu.surface)
+            .styleInnerTreatment(
+                designStyle = style,
+                cornerRadius = effectiveCorner,
+                isDark = neu.isDark,
+                accentColor = neu.accent,
+            )
             .border(
-                width = 1.dp,
-                color = if (neu.isDark) Color.White.copy(alpha = 0.05f) else Color.White.copy(alpha = 0.6f),
+                width = borderWidth,
+                color = borderColor,
                 shape = shape,
             )
             .then(
@@ -296,32 +470,56 @@ fun NeumorphicButton(
     content: @Composable () -> Unit,
 ) {
     val neu = currentNeumorphicColors
+    val style = neu.designStyle
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     val haptics = LocalHapticFeedback.current
+
+    val effectiveCorner = when (style) {
+        FoxyUiDesignStyle.CLAYMORPHISM -> cornerRadius * 1.15f
+        FoxyUiDesignStyle.NEO_BRUTALISM -> (cornerRadius * 0.6f).coerceAtLeast(8.dp)
+        FoxyUiDesignStyle.EDITORIAL_DESIGN -> (cornerRadius * 0.45f).coerceAtLeast(6.dp)
+        else -> cornerRadius
+    }
 
     val animatedElevation by animateDpAsState(
         targetValue = if (isPressed && enabled) 1.5.dp else elevation,
         label = "btn-elev",
     )
-    val shape = RoundedCornerShape(cornerRadius)
+    val shape = RoundedCornerShape(effectiveCorner)
     val bgColor = accentColor ?: neu.surface
+
+    val borderWidth = if (style == FoxyUiDesignStyle.NEO_BRUTALISM) 2.dp else 1.dp
+    val borderColor = when (style) {
+        FoxyUiDesignStyle.NEO_BRUTALISM -> if (neu.isDark) neu.accent else Color(0xFF111111)
+        FoxyUiDesignStyle.DARK_LUXURY -> neu.accent.copy(alpha = 0.40f)
+        else -> if (neu.isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.7f)
+    }
 
     Box(
         modifier = modifier
             .neumorphicRaised(
                 shape = shape,
-                cornerRadius = cornerRadius,
+                cornerRadius = effectiveCorner,
                 elevation = animatedElevation,
                 isPressed = isPressed && enabled,
                 lightShadowColor = neu.shadowLight.copy(alpha = if (neu.isDark) 0.35f else 0.9f),
                 darkShadowColor = neu.shadowDark.copy(alpha = if (neu.isDark) 0.75f else 0.5f),
+                designStyle = style,
+                isDark = neu.isDark,
+                accentColor = neu.accent,
             )
             .clip(shape)
             .background(bgColor)
+            .styleInnerTreatment(
+                designStyle = style,
+                cornerRadius = effectiveCorner,
+                isDark = neu.isDark,
+                accentColor = neu.accent,
+            )
             .border(
-                width = 1.dp,
-                color = if (neu.isDark) Color.White.copy(alpha = 0.08f) else Color.White.copy(alpha = 0.7f),
+                width = borderWidth,
+                color = borderColor,
                 shape = shape,
             )
             .clickable(
@@ -350,32 +548,63 @@ fun NeumorphicIconButton(
     content: @Composable () -> Unit,
 ) {
     val neu = currentNeumorphicColors
+    val style = neu.designStyle
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
-    val shape = CircleShape
     val haptics = LocalHapticFeedback.current
+
+    val shape = when (style) {
+        FoxyUiDesignStyle.NEO_BRUTALISM -> RoundedCornerShape(12.dp)
+        FoxyUiDesignStyle.BENTO_UI -> RoundedCornerShape(14.dp)
+        FoxyUiDesignStyle.EDITORIAL_DESIGN -> RoundedCornerShape(10.dp)
+        else -> CircleShape
+    }
+    val cornerRadius = when (style) {
+        FoxyUiDesignStyle.NEO_BRUTALISM -> 12.dp
+        FoxyUiDesignStyle.BENTO_UI -> 14.dp
+        FoxyUiDesignStyle.EDITORIAL_DESIGN -> 10.dp
+        else -> size / 2
+    }
 
     val elevation by animateDpAsState(
         targetValue = if (isPressed || isSelected) 1.dp else 4.dp,
         label = "icon-btn-elev",
     )
 
+    val borderWidth = if (style == FoxyUiDesignStyle.NEO_BRUTALISM) 1.8.dp else 1.dp
+    val borderColor = when {
+        isSelected -> neu.accent
+        style == FoxyUiDesignStyle.NEO_BRUTALISM -> if (neu.isDark) neu.accent.copy(alpha = 0.85f) else Color(0xFF111111)
+        style == FoxyUiDesignStyle.DARK_LUXURY -> neu.accent.copy(alpha = if (neu.isDark) 0.35f else 0.25f)
+        neu.isDark -> Color.White.copy(alpha = 0.08f)
+        else -> Color.White.copy(alpha = 0.78f)
+    }
+
     Box(
         modifier = modifier
             .size(size)
             .neumorphicRaised(
                 shape = shape,
-                cornerRadius = size / 2,
+                cornerRadius = cornerRadius,
                 elevation = elevation,
                 isPressed = isPressed || isSelected,
                 lightShadowColor = neu.shadowLight.copy(alpha = if (neu.isDark) 0.35f else 0.9f),
                 darkShadowColor = neu.shadowDark.copy(alpha = if (neu.isDark) 0.75f else 0.5f),
+                designStyle = style,
+                isDark = neu.isDark,
+                accentColor = neu.accent,
             )
             .clip(shape)
-            .background(if (isSelected) neu.accent.copy(alpha = 0.15f) else neu.surface)
+            .background(if (isSelected) neu.accent.copy(alpha = 0.16f) else neu.surface)
+            .styleInnerTreatment(
+                designStyle = style,
+                cornerRadius = cornerRadius,
+                isDark = neu.isDark,
+                accentColor = neu.accent,
+            )
             .border(
-                width = 1.dp,
-                color = if (isSelected) neu.accent else if (neu.isDark) Color.White.copy(alpha = 0.06f) else Color.White.copy(alpha = 0.75f),
+                width = borderWidth,
+                color = borderColor,
                 shape = shape,
             )
             .clickable(

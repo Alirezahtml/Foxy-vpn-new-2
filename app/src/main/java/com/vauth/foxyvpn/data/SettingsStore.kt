@@ -76,6 +76,96 @@ enum class FoxyColorTheme(
     }
 }
 
+enum class FoxyUiDesignStyle(
+    val label: String,
+    val persianLabel: String,
+    val arabicLabel: String,
+    val subtitleEn: String,
+    val subtitleFa: String,
+    val subtitleAr: String,
+) {
+    CLAYMORPHISM(
+        label = "Claymorphism",
+        persianLabel = "کلی‌مورفیسم (Claymorphism)",
+        arabicLabel = "كليمورفيزم ثلاثي الأبعاد",
+        subtitleEn = "3D inflated matte clay cards with dual inner bevels",
+        subtitleFa = "کارت‌های سه‌بعدی برجسته و نرم با لبه‌های حجمی",
+        subtitleAr = "بطاقات ثلاثية الأبعاد ناعمة بحواف بارزة",
+    ),
+    DARK_LUXURY(
+        label = "Dark Luxury",
+        persianLabel = "دارک لاکشری (Dark Luxury)",
+        arabicLabel = "الفخامة الداكنة والذهبي",
+        subtitleEn = "Obsidian velvet surfaces with brushed champagne gold borders",
+        subtitleFa = "سطوح مخملی مشکی-کربنی با قاب و خطوط طلایی لوکس",
+        subtitleAr = "أسطح مخملية داكنة مع إطارات ذهبية فاخرة",
+    ),
+    NEO_BRUTALISM(
+        label = "Neo-Brutalism",
+        persianLabel = "نئو-بروتالیسم (Neo-Brutalism)",
+        arabicLabel = "نيو بروتاليزم عصري",
+        subtitleEn = "Bold ink borders, high-contrast geometry & hard offset shadows",
+        subtitleFa = "خطوط ضخیم کنتراست بالا و سایه‌های هندسی تیز و مدرن",
+        subtitleAr = "حدود جريئة عالية التباين وظلال هندسية حادة",
+    ),
+    BENTO_UI(
+        label = "Bento UI",
+        persianLabel = "بنتو یوآی (Bento UI)",
+        arabicLabel = "واجهات بنتو الشبكية",
+        subtitleEn = "Modular Apple-style Bento compartments & ultra-clean glass hairlines",
+        subtitleFa = "چیدمان ماژولار و فوق‌تمیز به سبک باکس‌های بنتو اپل",
+        subtitleAr = "تصميم شبكي معياري نظيف بأسلوب أبل بنتو",
+    ),
+    EDITORIAL_DESIGN(
+        label = "Editorial Design",
+        persianLabel = "ادیتوریال (Editorial Design)",
+        arabicLabel = "التصميم التحريري الفاخر",
+        subtitleEn = "Architectural magazine grid, fine rule lines & warm gallery tones",
+        subtitleFa = "سبک مجله‌ای و معماری با خطوط ظریف و کنتراست تایپوگرافی",
+        subtitleAr = "تصميم تحريري معماري بخطوط دقيقة وتباين أنيق",
+    ),
+    NEUMORPHISM(
+        label = "Soft Neumorphism",
+        persianLabel = "نئومورفیسم (Neumorphism)",
+        arabicLabel = "نيومورفيزم كلاسيكي",
+        subtitleEn = "Classic soft dual-shadow tactile extruded surfaces",
+        subtitleFa = "سایه‌های نرم دوگانه و برجسته کلاسیک",
+        subtitleAr = "ظلال مزدوجة ناعمة كلاسيكية",
+    ),
+    ;
+
+    fun localizedLabel(lang: AppLanguage): String = when (lang) {
+        AppLanguage.EN -> label
+        AppLanguage.FA -> persianLabel
+        AppLanguage.AR -> arabicLabel
+    }
+
+    fun localizedSubtitle(lang: AppLanguage): String = when (lang) {
+        AppLanguage.EN -> subtitleEn
+        AppLanguage.FA -> subtitleFa
+        AppLanguage.AR -> subtitleAr
+    }
+}
+
+enum class HeroWaveAnimationStyle(
+    val label: String,
+    val persianLabel: String,
+    val arabicLabel: String,
+) {
+    HARMONIC_ORBIT("Harmonic Waves & Orbit", "امواج هارمونیک و مدار", "موجات توافقية ومدار"),
+    SONAR_PULSE("Deep Sonar Radar", "رادار سونار عمیق", "نبض السونار العميق"),
+    PLASMA_VORTEX("Plasma Energy Vortex", "گرداب انرژی پلاسما", "دوامة طاقة البلازما"),
+    STARFIELD_NOVA("Cosmic Nova Burst", "ابرنواختر کیهانی", "انفجار النوفا الكوني"),
+    CYBER_HEX_SHIELD("Cyber Hexagon Shield", "سپر شش‌ضلعی سایبری", "درع السداسي السيبراني"),
+    ;
+
+    fun localizedLabel(lang: AppLanguage): String = when (lang) {
+        AppLanguage.EN -> label
+        AppLanguage.FA -> persianLabel
+        AppLanguage.AR -> arabicLabel
+    }
+}
+
 enum class DynamicIslandLedStyle(
     val label: String,
     val persianLabel: String,
@@ -117,6 +207,10 @@ enum class DynamicIslandMotionStyle(
     PRISM_SHIMMER("Crystal Prism Shimmer", "درخشش منشوری کریستال", "بريق المنشور الكريستالي"),
     MAGNETIC_ELASTIC("Magnetic Elastic Morph", "کشسانی مغناطیسی نرم", "مرونة مغناطيسية ناعمة"),
     STARLIGHT_ORBIT("Starlight Orbital", "مدار ستاره‌ای درخشان", "مدار النجوم المضيئة"),
+    CYBER_GLITCH_PULSE("Cyber Matrix Pulse", "پالس ماتریکس سایبری", "نبض المصفوفة السيبرانية"),
+    AURORA_WAVE_FLOW("Aurora Ribbon Flow", "موج شفق قطبی روان", "تدفق الشفق القطبي"),
+    GRAVITY_PENDULUM("Smooth Pendulum Swing", "نوسان آونگی نرم", "تأرجح البندول الناعم"),
+    QUANTUM_PARTICLES("Quantum Energy Field", "میدان ذرات کوانتومی", "حقل الجسيمات الكمومية"),
     ;
 
     fun localizedLabel(lang: AppLanguage): String = when (lang) {
@@ -167,6 +261,24 @@ class SettingsStore(context: Context) {
         } ?: FoxyColorTheme.CYBER_FOX
         set(value) {
             prefs.edit().putString(KEY_APP_COLOR_THEME, value.name).apply()
+            _islandConfigRevision.value++
+        }
+
+    var appUiDesignStyle: FoxyUiDesignStyle
+        get() = FoxyUiDesignStyle.entries.firstOrNull {
+            it.name == prefs.getString(KEY_APP_UI_DESIGN_STYLE, null)
+        } ?: FoxyUiDesignStyle.CLAYMORPHISM
+        set(value) {
+            prefs.edit().putString(KEY_APP_UI_DESIGN_STYLE, value.name).apply()
+            _islandConfigRevision.value++
+        }
+
+    var heroWaveAnimationStyle: HeroWaveAnimationStyle
+        get() = HeroWaveAnimationStyle.entries.firstOrNull {
+            it.name == prefs.getString(KEY_HERO_WAVE_ANIM_STYLE, null)
+        } ?: HeroWaveAnimationStyle.HARMONIC_ORBIT
+        set(value) {
+            prefs.edit().putString(KEY_HERO_WAVE_ANIM_STYLE, value.name).apply()
             _islandConfigRevision.value++
         }
 
@@ -441,6 +553,13 @@ class SettingsStore(context: Context) {
         get() = prefs.getStringSet(KEY_DYNAMIC_ISLAND_PINNED_APPS, null)?.toSet() ?: DEFAULT_PINNED_ISLAND_APPS
         set(value) {
             prefs.edit().putStringSet(KEY_DYNAMIC_ISLAND_PINNED_APPS, HashSet(value)).apply()
+            _islandConfigRevision.value++
+        }
+
+    var dynamicIslandShowQuickApps: Boolean
+        get() = prefs.getBoolean(KEY_DYNAMIC_ISLAND_SHOW_QUICK_APPS, true)
+        set(value) {
+            prefs.edit().putBoolean(KEY_DYNAMIC_ISLAND_SHOW_QUICK_APPS, value).apply()
             _islandConfigRevision.value++
         }
 
@@ -983,6 +1102,9 @@ class SettingsStore(context: Context) {
         private const val KEY_KEEP_ALIVE_INTERVAL_SEC = "keep_alive_interval_sec"
         private const val KEY_AUTO_RECONNECT_ENABLED = "auto_reconnect_enabled"
         private const val KEY_APP_COLOR_THEME = "app_color_theme"
+        private const val KEY_APP_UI_DESIGN_STYLE = "app_ui_design_style"
+        private const val KEY_HERO_WAVE_ANIM_STYLE = "hero_wave_anim_style"
+        private const val KEY_DYNAMIC_ISLAND_SHOW_QUICK_APPS = "dynamic_island_show_quick_apps"
         private const val KEY_DYNAMIC_ISLAND_MOTION_STYLE = "dynamic_island_motion_style"
         private const val KEY_UNMETERED_VPN_MODE = "unmetered_vpn_mode_enabled"
         private const val KEY_TCP_BUFFER_BOOST = "tcp_buffer_boost_enabled"
