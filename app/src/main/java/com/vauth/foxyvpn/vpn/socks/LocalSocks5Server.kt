@@ -61,6 +61,7 @@ class LocalSocks5Server(
     private val port: Int,
     private val rejectFakeDnsAddresses: Boolean,
     private val dohUrl: String? = null,
+    private val tcpBufferBoost: Boolean = true,
     private val sessionProvider: () -> UpstreamSession?,
     private val onSessionUnhealthy: () -> Unit = {},
 ) {
@@ -110,9 +111,12 @@ class LocalSocks5Server(
         val server = ServerSocket()
 
         runCatching { server.reuseAddress = true }
+        if (tcpBufferBoost) {
+            runCatching { server.receiveBufferSize = 262_144 }
+        }
         server.bind(InetSocketAddress(InetAddress.getByName(bindAddress), port), ACCEPT_BACKLOG)
         serverSocket = server
-        AppLogger.i(TAG, "started local SOCKS5 proxy on $bindAddress:$port")
+        AppLogger.i(TAG, "started local SOCKS5 proxy on $bindAddress:$port (turboBuffers=$tcpBufferBoost)")
         scope.launch {
             while (!server.isClosed) {
                 val accepted = runCatching { server.accept() }
@@ -129,7 +133,13 @@ class LocalSocks5Server(
                     continue
                 }
 
-                runCatching { client.tcpNoDelay = true }
+                runCatching {
+                    client.tcpNoDelay = true
+                    if (tcpBufferBoost) {
+                        client.receiveBufferSize = 262_144
+                        client.sendBufferSize = 262_144
+                    }
+                }
                 if (!connectionSlots.tryAcquire()) {
                     AppLogger.w(TAG, "rejecting SOCKS5 client: connection limit ($MAX_CONCURRENT_CLIENT_CONNECTIONS) reached")
                     runCatching { client.close() }
@@ -415,13 +425,14 @@ class LocalSocks5Server(
         output.write(socksReply(0x00, socket.localAddress, socket.localPort))
         output.flush()
 
+        val relayBufSize = if (tcpBufferBoost) 64 * 1024 else RELAY_BUFFER_BYTES
         val clientToUpstream = scope.launch {
-            runCatching { socket.getInputStream().copyTo(tunneled.output, RELAY_BUFFER_BYTES) }
+            runCatching { socket.getInputStream().copyTo(tunneled.output, relayBufSize) }
 
             runCatching { tunneled.output.close() }
         }
 
-        runCatching { tunneled.input.copyTo(output, RELAY_BUFFER_BYTES) }
+        runCatching { tunneled.input.copyTo(output, relayBufSize) }
 
         runCatching { socket.shutdownOutput() }
 

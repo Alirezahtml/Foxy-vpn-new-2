@@ -136,6 +136,7 @@ class H2UpstreamSession(
     private val upstreamProxy: UpstreamProxyConfig? = null,
     private val edgeAddress: String? = null,
     private val tlsSplitMode: SettingsStore.TlsSplitMode = SettingsStore.TlsSplitMode.OFF,
+    private val tcpBufferBoost: Boolean = true,
 ) : UpstreamSession {
 
     private val group = NioEventLoopGroup(1)
@@ -265,7 +266,8 @@ class H2UpstreamSession(
             }
 
             .option(ChannelOption.TCP_NODELAY, true)
-
+            .option(ChannelOption.SO_RCVBUF, if (tcpBufferBoost) 524_288 else 131_072)
+            .option(ChannelOption.SO_SNDBUF, if (tcpBufferBoost) 524_288 else 131_072)
             .option(ChannelOption.SO_KEEPALIVE, true)
             .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, TCP_CONNECT_TIMEOUT_MS)
             .option(ChannelOption.WRITE_BUFFER_WATER_MARK, PARENT_WRITE_WATER_MARK)
@@ -294,7 +296,7 @@ class H2UpstreamSession(
 
                         .initialSettings(
                             Http2Settings.defaultSettings()
-                                .initialWindowSize(HTTP2_FLOW_CONTROL_WINDOW_BYTES)
+                                .initialWindowSize(if (tcpBufferBoost) 32 * 1024 * 1024 else HTTP2_FLOW_CONTROL_WINDOW_BYTES)
                                 .maxFrameSize(HTTP2_MAX_FRAME_SIZE_BYTES)
                                 .pushEnabled(false),
                         )

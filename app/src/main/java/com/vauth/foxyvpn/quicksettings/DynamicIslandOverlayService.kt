@@ -66,8 +66,9 @@ class DynamicIslandOverlayService : Service(), LifecycleOwner, ViewModelStoreOwn
         val app = applicationContext as? FoxyVpnApp ?: return
         windowManager = getSystemService(Context.WINDOW_SERVICE) as? WindowManager
 
+        val baseOffsetY = 8
         val initialX = app.settingsStore.dynamicIslandOffsetX.roundToInt()
-        val initialY = 12 + app.settingsStore.dynamicIslandOffsetY.roundToInt()
+        val initialY = (baseOffsetY + app.settingsStore.dynamicIslandOffsetY.roundToInt()).coerceIn(0, 2200)
 
         val params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -79,8 +80,7 @@ class DynamicIslandOverlayService : Service(), LifecycleOwner, ViewModelStoreOwn
                 WindowManager.LayoutParams.TYPE_PHONE
             },
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
-                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
@@ -101,7 +101,7 @@ class DynamicIslandOverlayService : Service(), LifecycleOwner, ViewModelStoreOwn
                 LaunchedEffect(revision) {
                     val lp = windowLayoutParams ?: return@LaunchedEffect
                     val targetX = app.settingsStore.dynamicIslandOffsetX.roundToInt()
-                    val targetY = 12 + app.settingsStore.dynamicIslandOffsetY.roundToInt()
+                    val targetY = (baseOffsetY + app.settingsStore.dynamicIslandOffsetY.roundToInt()).coerceIn(0, 2200)
                     if (lp.x != targetX || lp.y != targetY) {
                         lp.x = targetX
                         lp.y = targetY
@@ -121,16 +121,20 @@ class DynamicIslandOverlayService : Service(), LifecycleOwner, ViewModelStoreOwn
                         selectedProxy = proxy,
                         onDisconnect = { FoxyVpnService.stop(this@DynamicIslandOverlayService) },
                         onRequestConnect = {
-                            val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            runCatching {
+                                val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                }
+                                startActivity(intent)
                             }
-                            startActivity(intent)
                         },
                         onOpenServers = {
-                            val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
-                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                            runCatching {
+                                val intent = Intent(this@DynamicIslandOverlayService, MainActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                }
+                                startActivity(intent)
                             }
-                            startActivity(intent)
                         },
                         isSystemOverlay = true,
                         onOverlayDragDelta = { dx, dy ->
@@ -138,7 +142,7 @@ class DynamicIslandOverlayService : Service(), LifecycleOwner, ViewModelStoreOwn
                             lp.x += dx.roundToInt()
                             lp.y = (lp.y + dy.roundToInt()).coerceIn(0, 2200)
                             app.settingsStore.dynamicIslandOffsetX = lp.x.toFloat()
-                            app.settingsStore.dynamicIslandOffsetY = (lp.y - 12).toFloat()
+                            app.settingsStore.dynamicIslandOffsetY = (lp.y - baseOffsetY).toFloat()
                             runCatching {
                                 overlayView?.let { v -> windowManager?.updateViewLayout(v, lp) }
                             }

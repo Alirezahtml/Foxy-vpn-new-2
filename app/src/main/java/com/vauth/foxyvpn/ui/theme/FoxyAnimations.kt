@@ -199,23 +199,28 @@ fun Modifier.automotiveLedBorder(
 ): Modifier = composed {
     if (!enabled) return@composed this
 
-    var angleDeg by remember { mutableFloatStateOf(0f) }
-    var pulsePhase by remember { mutableFloatStateOf(0f) }
     val clampedSpeed = speedMultiplier.coerceIn(0.3f, 2.5f)
+    val rotationDurationMs = (2400f / clampedSpeed).toInt().coerceIn(750, 8000)
 
-    LaunchedEffect(clampedSpeed) {
-        var lastFrameMs = withInfiniteAnimationFrameMillis { it }
-        while (isActive) {
-            val nowMs = withInfiniteAnimationFrameMillis { it }
-            val dtSec = ((nowMs - lastFrameMs).coerceIn(1L, 64L)) / 1000f
-            lastFrameMs = nowMs
-            // 150 deg/sec at 1.0x -> buttery-smooth 60/120Hz continuous rotation
-            angleDeg = (angleDeg + dtSec * 150f * clampedSpeed) % 360f
-            pulsePhase = (pulsePhase + dtSec * 3.2f) % (2f * PI.toFloat())
-        }
-    }
-
-    val pulseGlow = 0.80f + 0.20f * sin(pulsePhase)
+    val infinite = rememberInfiniteTransition(label = "automotive-led-border")
+    val angleDeg by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = rotationDurationMs, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "led-angle",
+    )
+    val pulseGlow by infinite.animateFloat(
+        initialValue = 0.72f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 1100, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse,
+        ),
+        label = "led-pulse-glow",
+    )
 
     val palette = remember(style) {
         when (style) {
@@ -336,11 +341,10 @@ fun Modifier.automotiveLedBorder(
         drawContent()
         val w = size.width
         val h = size.height
-        if (w <= 0f || h <= 0f) return@drawWithContent
+        val strokePx = borderWidth.toPx().coerceAtLeast(1f)
+        if (w <= strokePx * 2f || h <= strokePx * 2f) return@drawWithContent
 
-        val strokePx = borderWidth.toPx()
-        val cornerPx = cornerRadius.toPx()
-        val glowPx = glowRadius.toPx() * pulseGlow
+        val cornerPx = cornerRadius.toPx().coerceAtLeast(0f)
         val center = Offset(w / 2f, h / 2f)
 
         val shader = SweepGradientShader(
@@ -349,38 +353,39 @@ fun Modifier.automotiveLedBorder(
             colorStops = null,
         )
         val matrix = android.graphics.Matrix().apply {
-            postRotate(angleDeg, center.x, center.y)
+            setRotate(angleDeg, center.x, center.y)
         }
         shader.setLocalMatrix(matrix)
+        val ledBrush = ShaderBrush(shader)
+        val rectTopLeft = Offset(strokePx / 2f, strokePx / 2f)
+        val rectSize = Size((w - strokePx).coerceAtLeast(1f), (h - strokePx).coerceAtLeast(1f))
+        val cr = CornerRadius(cornerPx, cornerPx)
 
-        // Outer neon halo glow (automotive ambient light diffuser)
-        drawIntoCanvas { canvas ->
-            val glowPaint = Paint().asFrameworkPaint().apply {
-                isAntiAlias = true
-                this.style = android.graphics.Paint.Style.STROKE
-                strokeWidth = strokePx * 1.9f
-                this.shader = shader
-                alpha = (185 * pulseGlow).toInt().coerceIn(85, 235)
-                maskFilter = BlurMaskFilter(glowPx.coerceAtLeast(1f), BlurMaskFilter.Blur.NORMAL)
-            }
-            val inset = strokePx / 2f
-            canvas.nativeCanvas.drawRoundRect(
-                inset,
-                inset,
-                w - inset,
-                h - inset,
-                cornerPx,
-                cornerPx,
-                glowPaint,
-            )
-        }
-
+        // Outer soft ambient neon diffuser layer (HWUI-safe multi-pass stroke)
+        drawRoundRect(
+            brush = ledBrush,
+            topLeft = rectTopLeft,
+            size = rectSize,
+            cornerRadius = cr,
+            alpha = (0.24f * pulseGlow).coerceIn(0.08f, 0.40f),
+            style = Stroke(width = strokePx * 2.8f, cap = StrokeCap.Round),
+        )
+        // Mid neon bloom layer
+        drawRoundRect(
+            brush = ledBrush,
+            topLeft = rectTopLeft,
+            size = rectSize,
+            cornerRadius = cr,
+            alpha = (0.48f * pulseGlow).coerceIn(0.18f, 0.65f),
+            style = Stroke(width = strokePx * 1.65f, cap = StrokeCap.Round),
+        )
         // Crisp high-brightness LED core tube
         drawRoundRect(
-            brush = ShaderBrush(shader),
-            topLeft = Offset(strokePx / 2f, strokePx / 2f),
-            size = Size(w - strokePx, h - strokePx),
-            cornerRadius = CornerRadius(cornerPx, cornerPx),
+            brush = ledBrush,
+            topLeft = rectTopLeft,
+            size = rectSize,
+            cornerRadius = cr,
+            alpha = 0.98f,
             style = Stroke(width = strokePx, cap = StrokeCap.Round),
         )
     }
@@ -402,20 +407,28 @@ fun Modifier.dynamicIslandMotionEffect(
 ): Modifier = composed {
     if (!enabled) return@composed this
 
-    var phaseRad by remember { mutableFloatStateOf(0f) }
-    var shimmerProgress by remember { mutableFloatStateOf(0f) }
-
-    LaunchedEffect(style, isConnected) {
-        var lastMs = withInfiniteAnimationFrameMillis { it }
-        while (isActive) {
-            val nowMs = withInfiniteAnimationFrameMillis { it }
-            val dt = ((nowMs - lastMs).coerceIn(1L, 64L)) / 1000f
-            lastMs = nowMs
-            val speed = if (isConnected) 2.4f else 1.5f
-            phaseRad = (phaseRad + dt * speed) % (20f * PI.toFloat())
-            shimmerProgress = (shimmerProgress + dt * 0.55f) % 1f
-        }
-    }
+    val infinite = rememberInfiniteTransition(label = "island-motion-physics")
+    val phaseRad by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = (2f * PI).toFloat(),
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = if (isConnected) 2600 else 3800,
+                easing = LinearEasing,
+            ),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "island-phase-rad",
+    )
+    val shimmerProgress by infinite.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 2400, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "island-shimmer-prog",
+    )
 
     val trafficFactor = (trafficRateBytesPerSec.toFloat() / (512f * 1024f)).coerceIn(0f, 1f)
 
@@ -423,15 +436,15 @@ fun Modifier.dynamicIslandMotionEffect(
         .graphicsLayer {
             when (style) {
                 DynamicIslandMotionStyle.LIQUID_SPRING -> {
-                    val s = if (isExpanded) 1f else 1f + 0.012f * sin(phaseRad * 1.1f)
+                    val s = if (isExpanded) 1f else 1f + 0.012f * sin(phaseRad)
                     scaleX = s
                     scaleY = s
-                    translationY = sin(phaseRad * 0.9f) * 2.2f
+                    translationY = if (isExpanded) 0f else sin(phaseRad) * 2.0f
                 }
                 DynamicIslandMotionStyle.ZERO_GRAVITY -> {
-                    translationY = sin(phaseRad * 0.85f) * 5.5f
-                    translationX = cos(phaseRad * 0.6f) * 2.8f
-                    rotationZ = if (isExpanded) 0f else sin(phaseRad * 0.5f) * 0.75f
+                    translationY = if (isExpanded) 0f else sin(phaseRad) * 4.5f
+                    translationX = if (isExpanded) 0f else cos(phaseRad) * 2.2f
+                    rotationZ = if (isExpanded) 0f else sin(phaseRad) * 0.65f
                 }
                 DynamicIslandMotionStyle.BREATHING_HALO -> {
                     val breath = 1f + 0.018f * ((sin(phaseRad) + 1f) * 0.5f)
@@ -439,17 +452,16 @@ fun Modifier.dynamicIslandMotionEffect(
                     scaleY = if (isExpanded) 1f else breath
                 }
                 DynamicIslandMotionStyle.SONIC_WAVE_SYNC -> {
-                    val dynamicAmp = 0.008f + trafficFactor * 0.032f
-                    val s = if (isExpanded) 1f else 1f + sin(phaseRad * 2.6f) * dynamicAmp
+                    val dynamicAmp = 0.008f + trafficFactor * 0.030f
+                    val s = if (isExpanded) 1f else 1f + sin(phaseRad * 2f) * dynamicAmp
                     scaleX = s
                     scaleY = s
                 }
                 DynamicIslandMotionStyle.HEARTBEAT_PULSE -> {
-                    // Smooth cardiac lub-dub envelope
-                    val t = (phaseRad * 0.45f) % 1f
+                    val t = (phaseRad / (2f * PI.toFloat())).coerceIn(0f, 1f)
                     val beat = when {
-                        t < 0.12f -> sin((t / 0.12f) * PI.toFloat()) * 0.026f
-                        t in 0.18f..0.30f -> sin(((t - 0.18f) / 0.12f) * PI.toFloat()) * 0.016f
+                        t < 0.14f -> sin((t / 0.14f) * PI.toFloat()) * 0.024f
+                        t in 0.20f..0.34f -> sin(((t - 0.20f) / 0.14f) * PI.toFloat()) * 0.015f
                         else -> 0f
                     }
                     val s = if (isExpanded) 1f else 1f + beat
@@ -457,16 +469,16 @@ fun Modifier.dynamicIslandMotionEffect(
                     scaleY = s
                 }
                 DynamicIslandMotionStyle.PRISM_SHIMMER -> {
-                    translationY = sin(phaseRad * 0.75f) * 1.8f
+                    translationY = if (isExpanded) 0f else sin(phaseRad) * 1.6f
                 }
                 DynamicIslandMotionStyle.MAGNETIC_ELASTIC -> {
-                    val stretchX = if (isExpanded) 1f else 1f + sin(phaseRad * 1.2f) * 0.016f
-                    val stretchY = if (isExpanded) 1f else 1f - sin(phaseRad * 1.2f) * 0.012f
+                    val stretchX = if (isExpanded) 1f else 1f + sin(phaseRad) * 0.015f
+                    val stretchY = if (isExpanded) 1f else 1f - sin(phaseRad) * 0.011f
                     scaleX = stretchX
                     scaleY = stretchY
                 }
                 DynamicIslandMotionStyle.STARLIGHT_ORBIT -> {
-                    translationY = sin(phaseRad * 0.8f) * 2.5f
+                    translationY = if (isExpanded) 0f else sin(phaseRad) * 2.0f
                 }
             }
         }
@@ -474,15 +486,14 @@ fun Modifier.dynamicIslandMotionEffect(
             drawContent()
             val w = size.width
             val h = size.height
-            if (w <= 0f || h <= 0f) return@drawWithContent
-            val rPx = cornerRadius.toPx()
+            if (w <= 8f || h <= 8f) return@drawWithContent
+            val rPx = cornerRadius.toPx().coerceAtLeast(0f)
 
             when (style) {
                 DynamicIslandMotionStyle.PRISM_SHIMMER,
                 DynamicIslandMotionStyle.LIQUID_SPRING -> {
-                    // Soft diagonal specular silk sheen sweeping across the island
                     val sweepX = (-0.35f + shimmerProgress * 1.7f) * w
-                    val shimmerAlpha = if (style == DynamicIslandMotionStyle.PRISM_SHIMMER) 0.22f else 0.10f
+                    val shimmerAlpha = if (style == DynamicIslandMotionStyle.PRISM_SHIMMER) 0.18f else 0.08f
                     drawRoundRect(
                         brush = Brush.linearGradient(
                             colors = listOf(
@@ -492,40 +503,42 @@ fun Modifier.dynamicIslandMotionEffect(
                                 Color.Transparent,
                             ),
                             start = Offset(sweepX - w * 0.25f, 0f),
-                            end = Offset(sweepX + w * 0.25f, h),
+                            end = Offset((sweepX + w * 0.25f).coerceAtLeast(sweepX - w * 0.25f + 1f), h),
                         ),
                         cornerRadius = CornerRadius(rPx, rPx),
                     )
                 }
                 DynamicIslandMotionStyle.BREATHING_HALO,
                 DynamicIslandMotionStyle.SONIC_WAVE_SYNC -> {
-                    val haloAlpha = (0.14f + 0.14f * sin(phaseRad * 1.5f) + trafficFactor * 0.15f).coerceIn(0.05f, 0.38f)
-                    drawRoundRect(
-                        color = accentColor.copy(alpha = haloAlpha),
-                        topLeft = Offset(1.5.dp.toPx(), 1.5.dp.toPx()),
-                        size = Size(w - 3.dp.toPx(), h - 3.dp.toPx()),
-                        cornerRadius = CornerRadius(rPx, rPx),
-                        style = Stroke(width = 1.6.dp.toPx()),
-                    )
+                    val inset = 1.5.dp.toPx()
+                    if (w > inset * 2f && h > inset * 2f) {
+                        val haloAlpha = (0.14f + 0.12f * sin(phaseRad) + trafficFactor * 0.14f).coerceIn(0.05f, 0.36f)
+                        drawRoundRect(
+                            color = accentColor.copy(alpha = haloAlpha),
+                            topLeft = Offset(inset, inset),
+                            size = Size(w - inset * 2f, h - inset * 2f),
+                            cornerRadius = CornerRadius(rPx, rPx),
+                            style = Stroke(width = 1.6.dp.toPx()),
+                        )
+                    }
                 }
                 DynamicIslandMotionStyle.STARLIGHT_ORBIT -> {
-                    // 4 orbiting starlight micro-particles gliding along the Dynamic Island
                     val cx = w / 2f
                     val cy = h / 2f
-                    val rx = (w / 2f) - 4.dp.toPx()
-                    val ry = (h / 2f) - 4.dp.toPx()
+                    val rx = ((w / 2f) - 4.dp.toPx()).coerceAtLeast(1f)
+                    val ry = ((h / 2f) - 4.dp.toPx()).coerceAtLeast(1f)
                     for (idx in 0 until 4) {
-                        val a = phaseRad * 0.9f + idx * (PI.toFloat() / 2f)
+                        val a = phaseRad + idx * (PI.toFloat() / 2f)
                         val px = cx + rx * cos(a)
                         val py = cy + ry * sin(a)
                         drawCircle(
                             color = accentColor.copy(alpha = 0.45f),
-                            radius = 4.5.dp.toPx(),
+                            radius = 4.2.dp.toPx(),
                             center = Offset(px, py),
                         )
                         drawCircle(
-                            color = Color.White.copy(alpha = 0.92f),
-                            radius = 1.8.dp.toPx(),
+                            color = Color.White.copy(alpha = 0.90f),
+                            radius = 1.7.dp.toPx(),
                             center = Offset(px, py),
                         )
                     }

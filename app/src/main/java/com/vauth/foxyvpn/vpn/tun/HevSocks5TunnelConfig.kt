@@ -30,9 +30,9 @@ object HevSocks5TunnelConfig {
     private const val UDP_READ_WRITE_TIMEOUT_MS = 60_000
 
     private const val TCP_BUFFER_SIZE_BYTES = 65_536
-    private const val TCP_BUFFER_SIZE_BOOSTED_BYTES = 262_144
 
     private const val TASK_STACK_SIZE_BYTES = 86_016
+    private const val TASK_STACK_SIZE_BOOSTED_BYTES = 147_456
 
     private const val UDP_RECV_BUFFER_SIZE_BYTES = 524_288
     private const val UDP_RECV_BUFFER_SIZE_BOOSTED_BYTES = 1_048_576
@@ -64,7 +64,8 @@ object HevSocks5TunnelConfig {
         mtu: Int = TUN_MTU,
         tcpBufferBoost: Boolean = true,
     ): String {
-        val tcpBuf = if (tcpBufferBoost) TCP_BUFFER_SIZE_BOOSTED_BYTES else TCP_BUFFER_SIZE_BYTES
+        val tcpBuf = TCP_BUFFER_SIZE_BYTES
+        val taskStack = if (tcpBufferBoost) TASK_STACK_SIZE_BOOSTED_BYTES else TASK_STACK_SIZE_BYTES
         val udpBuf = if (tcpBufferBoost) UDP_RECV_BUFFER_SIZE_BOOSTED_BYTES else UDP_RECV_BUFFER_SIZE_BYTES
         val udpCopyNums = if (tcpBufferBoost) UDP_COPY_BUFFER_BOOSTED_NUMS else UDP_COPY_BUFFER_NUMS
 
@@ -93,7 +94,7 @@ object HevSocks5TunnelConfig {
             """.trimIndent() + "\n" + mapdnsBlock +
             """
             misc:
-              task-stack-size: $TASK_STACK_SIZE_BYTES
+              task-stack-size: $taskStack
               connect-timeout: $CONNECT_TIMEOUT_MS
               tcp-read-write-timeout: $TCP_READ_WRITE_TIMEOUT_MS
               udp-read-write-timeout: $UDP_READ_WRITE_TIMEOUT_MS

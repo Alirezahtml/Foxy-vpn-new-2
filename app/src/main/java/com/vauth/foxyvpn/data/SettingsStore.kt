@@ -133,16 +133,7 @@ class SettingsStore(context: Context) {
     val islandConfigRevision: StateFlow<Int> = _islandConfigRevision
 
     private val credentialsPrefs by lazy {
-        val masterKey = MasterKey.Builder(appContext)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            appContext,
-            "foxyvpn_settings_credentials",
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+        createSafeEncryptedPrefs(appContext, "foxyvpn_settings_credentials")
     }
 
     var appLanguage: AppLanguage

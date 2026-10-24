@@ -1,6 +1,7 @@
 package com.vauth.foxyvpn.data
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.vauth.foxyvpn.data.model.RuntimeAuth
@@ -9,24 +10,18 @@ private const val TAG = "TokenStore"
 
 class TokenStore(context: Context) {
 
-    private val masterKey = MasterKey.Builder(context)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-
-    private val prefs = EncryptedSharedPreferences.create(
-        context,
-        "foxyvpn_tokens",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+    private val prefs: SharedPreferences = createSafeEncryptedPrefs(context.applicationContext, "foxyvpn_tokens")
 
     fun saveAuth(auth: RuntimeAuth) {
-        prefs.edit()
-            .putString(KEY_ACCESS_TOKEN, auth.accessToken)
-            .putString(KEY_REFRESH_TOKEN, auth.refreshToken)
-            .putLong(KEY_EXPIRES_AT, auth.expiresAtEpochSeconds)
-            .apply()
+        runCatching {
+            prefs.edit()
+                .putString(KEY_ACCESS_TOKEN, auth.accessToken)
+                .putString(KEY_REFRESH_TOKEN, auth.refreshToken)
+                .putLong(KEY_EXPIRES_AT, auth.expiresAtEpochSeconds)
+                .apply()
+        }.onFailure {
+            AppLogger.w(TAG, "could not persist session", it)
+        }
     }
 
     fun loadAuth(): RuntimeAuth? = runCatching {
@@ -50,17 +45,19 @@ class TokenStore(context: Context) {
     fun hasRefreshToken(): Boolean = loadAuth()?.refreshToken != null
 
     var pendingSessionToken: String?
-        get() = prefs.getString(KEY_PENDING_SESSION_TOKEN, null)?.takeIf { it.isNotBlank() }
+        get() = runCatching { prefs.getString(KEY_PENDING_SESSION_TOKEN, null)?.takeIf { it.isNotBlank() } }.getOrNull()
         set(value) {
-            if (value != null) {
-                prefs.edit().putString(KEY_PENDING_SESSION_TOKEN, value).apply()
-            } else {
-                prefs.edit().remove(KEY_PENDING_SESSION_TOKEN).apply()
+            runCatching {
+                if (value != null) {
+                    prefs.edit().putString(KEY_PENDING_SESSION_TOKEN, value).apply()
+                } else {
+                    prefs.edit().remove(KEY_PENDING_SESSION_TOKEN).apply()
+                }
             }
         }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        runCatching { prefs.edit().clear().apply() }
     }
 
     companion object {
@@ -70,5 +67,38 @@ class TokenStore(context: Context) {
         private const val KEY_PENDING_SESSION_TOKEN = "pending_session_token"
 
         private const val CLOCK_SKEW_TOLERANCE_SECONDS = 60L
+    }
+}
+
+internal fun createSafeEncryptedPrefs(context: Context, fileName: String): SharedPreferences {
+    val firstAttempt = runCatching {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            fileName,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+    if (firstAttempt.isSuccess) return firstAttempt.getOrThrow()
+
+    runCatching { context.deleteSharedPreferences(fileName) }
+    val secondAttempt = runCatching {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            fileName,
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
+    }
+    return secondAttempt.getOrElse {
+        context.getSharedPreferences("${fileName}_fallback", Context.MODE_PRIVATE)
     }
 }

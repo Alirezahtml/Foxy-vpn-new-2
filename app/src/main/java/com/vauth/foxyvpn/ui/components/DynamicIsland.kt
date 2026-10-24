@@ -143,7 +143,8 @@ private fun Modifier.nativeIslandDropShadow(
     glowAlpha: Float,
 ): Modifier = this.then(
     Modifier.drawBehind {
-        val rPx = cornerRadius.toPx()
+        if (size.width <= 4f || size.height <= 4f) return@drawBehind
+        val rPx = cornerRadius.toPx().coerceAtLeast(0f)
         val blurPx = shadowElevation.toPx().coerceAtLeast(1f)
         val dyPx = (shadowElevation * 0.42f).toPx()
 

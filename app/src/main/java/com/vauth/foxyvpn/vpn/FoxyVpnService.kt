@@ -16,6 +16,7 @@ import android.os.Build
 import android.os.ParcelFileDescriptor
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.vauth.foxyvpn.FoxyVpnApp
 import com.vauth.foxyvpn.MainActivity
 import com.vauth.foxyvpn.data.AppLogger
@@ -514,6 +515,31 @@ class FoxyVpnService : VpnService() {
             var candidateIndex = 0
             var alternatesDiscovered = false
 
+            if (settingsStore.smartPingAutoSwitch && settingsStore.effectiveCustomEdgeAddress == null) {
+                runCatching {
+                    val alt = discoverAlternateCandidates(primaryCandidate)
+                        .filter { it.authority != primaryCandidate.authority }
+                        .take(MAX_ALTERNATE_EDGES)
+                    if (alt.isNotEmpty()) {
+                        alternatesDiscovered = true
+                        val pool = listOf(primaryCandidate) + alt
+                        val scored = pool.map { cand ->
+                            val rtt = PingUtil.measureTcpLatencyMs(cand.host, cand.port) ?: Int.MAX_VALUE
+                            cand to rtt
+                        }.sortedBy { it.second }
+                        candidates = scored.map { it.first }
+                        val best = scored.first()
+                        if (best.second < Int.MAX_VALUE && best.first.authority != primaryCandidate.authority) {
+                            proxyStateStore.save(best.first)
+                            AppLogger.i(
+                                TAG,
+                                "Smart Ping Auto-Optimizer selected fastest edge ${best.first.authority} (${best.second}ms)",
+                            )
+                        }
+                    }
+                }
+            }
+
             fun activeCandidate(): ProxyCandidate = candidates[candidateIndex.coerceIn(0, candidates.lastIndex)]
 
             suspend fun rotateCandidate(): Boolean {
@@ -576,7 +602,7 @@ class FoxyVpnService : VpnService() {
 
             AppLogger.i(
                 TAG,
-                "connect: target=${primaryCandidate.authority} country=${primaryCandidate.countryCode} bootstrap=$bootstrapDesc$chainSuffix$edgeSuffix",
+                "connect: target=${activeCandidate().authority} country=${activeCandidate().countryCode} bootstrap=$bootstrapDesc$chainSuffix$edgeSuffix",
             )
 
             val socksPort = settingsStore.socksPort
@@ -585,6 +611,7 @@ class FoxyVpnService : VpnService() {
             val httpProxyEnabled = settingsStore.httpProxyEnabled
             val proxyOnlyMode = settingsStore.proxyOnlyMode
             val excludedApps = settingsStore.excludedApps
+            val turboBuffers = settingsStore.tcpBufferBoostEnabled
 
             val dohUrl = settingsStore.effectiveDohUrl
 
@@ -607,11 +634,12 @@ class FoxyVpnService : VpnService() {
 
             val mapdnsActive = !proxyOnlyMode && dohUrl == null
             val socks = LocalSocks5Server(
-                socksBindAddress,
-                socksPort,
-                mapdnsActive,
-                dohUrl,
-                { upstreamSession },
+                bindAddress = socksBindAddress,
+                port = socksPort,
+                rejectFakeDnsAddresses = mapdnsActive,
+                dohUrl = dohUrl,
+                tcpBufferBoost = turboBuffers,
+                sessionProvider = { upstreamSession },
             ) {
                 onUpstreamSessionUnhealthy()
             }
@@ -660,7 +688,7 @@ class FoxyVpnService : VpnService() {
                     socksPort,
                     useMapDns = mapdnsActive,
                     mtu = settingsStore.mtu,
-                    tcpBufferBoost = settingsStore.tcpBufferBoostEnabled,
+                    tcpBufferBoost = turboBuffers,
                 )
                 val tunnelStarted = HevSocks5Tunnel.start(tunnelConfigPath, fd.fd)
                 if (!tunnelStarted) error("Failed to start the tun2socks tunnel (hev-socks5-tunnel)")
@@ -726,6 +754,7 @@ class FoxyVpnService : VpnService() {
                     upstreamProxyConfig,
                     edgeAddress,
                     tlsSplitMode = settingsStore.tlsSplitMode,
+                    tcpBufferBoost = turboBuffers,
                 )
                 try {
                     session.connect()
@@ -1205,6 +1234,7 @@ class FoxyVpnService : VpnService() {
             var lastSampleAt = System.currentTimeMillis()
             var tickCount = 0
             var idleSeconds = 0L
+            var consecutiveHighPingChecks = 0
             _idleTimerSeconds.value = 0L
 
             while (isActive) {
@@ -1265,6 +1295,19 @@ class FoxyVpnService : VpnService() {
                             val livePing = PingUtil.measureTcpLatencyMs(endpoint.first, endpoint.second)
                             if (livePing != null && _state.value == ConnectionState.CONNECTED) {
                                 _pingLatencyMs.value = livePing
+                                if (settingsStore.smartPingAutoSwitch && livePing > 380) {
+                                    consecutiveHighPingChecks++
+                                    if (consecutiveHighPingChecks >= 3) {
+                                        consecutiveHighPingChecks = 0
+                                        AppLogger.i(
+                                            TAG,
+                                            "Smart Ping Auto-Optimizer detected sustained high latency (${livePing}ms); probing faster edge",
+                                        )
+                                        onUpstreamSessionUnhealthy()
+                                    }
+                                } else {
+                                    consecutiveHighPingChecks = 0
+                                }
                             }
                         }
                     }
@@ -1341,14 +1384,19 @@ class FoxyVpnService : VpnService() {
     private fun enterForeground(text: String) {
         foregroundActive = true
         lastNotificationText = text
+        val notification = buildNotification(text)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(
-                NOTIFICATION_ID,
-                buildNotification(text),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
-            )
+            runCatching {
+                startForeground(
+                    NOTIFICATION_ID,
+                    notification,
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
+                )
+            }.onFailure {
+                runCatching { startForeground(NOTIFICATION_ID, notification) }
+            }
         } else {
-            startForeground(NOTIFICATION_ID, buildNotification(text))
+            runCatching { startForeground(NOTIFICATION_ID, notification) }
         }
     }
 
@@ -1418,7 +1466,13 @@ class FoxyVpnService : VpnService() {
         }
 
         fun start(context: Context) {
-            context.startForegroundService(Intent(context, FoxyVpnService::class.java).setAction(ACTION_CONNECT))
+            val intent = Intent(context, FoxyVpnService::class.java).setAction(ACTION_CONNECT)
+            runCatching {
+                ContextCompat.startForegroundService(context, intent)
+            }.onFailure {
+                runCatching { context.startService(intent) }
+                    .onFailure { err -> AppLogger.e(TAG, "could not start FoxyVpnService", err) }
+            }
         }
 
         fun stop(context: Context) {
